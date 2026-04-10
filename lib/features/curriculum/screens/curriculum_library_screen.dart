@@ -87,15 +87,10 @@ class CurriculumLibraryScreen extends ConsumerWidget {
             onPressed: () async {
               Navigator.pop(context);
               try {
-                await ref.read(curriculumApiProvider).enroll(program.id);
+                final enrollment = await ref.read(curriculumApiProvider).enroll(program.id);
                 ref.invalidate(myEnrollmentsProvider);
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Inscrit à ${program.titleFr} !'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                  context.push('/student/curriculum/${enrollment.id}');
                 }
               } catch (e) {
                 if (context.mounted) {
