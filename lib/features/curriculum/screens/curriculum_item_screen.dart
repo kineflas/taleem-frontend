@@ -1,9 +1,11 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/network/api_client.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
 
@@ -28,6 +30,32 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
   bool _completed = false;
   int _selectedMastery = 2; // default: practiced
   bool _loading = false;
+  final _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playAudio(String audioUrl) async {
+    if (_isPlaying) {
+      await _audioPlayer.stop();
+      setState(() => _isPlaying = false);
+      return;
+    }
+    try {
+      final fullUrl = '${ApiConstants.baseUrl}$audioUrl';
+      setState(() => _isPlaying = true);
+      await _audioPlayer.play(UrlSource(fullUrl));
+      _audioPlayer.onPlayerComplete.listen((_) {
+        if (mounted) setState(() => _isPlaying = false);
+      });
+    } catch (e) {
+      if (mounted) setState(() => _isPlaying = false);
+    }
+  }
 
   Future<void> _markComplete() async {
     setState(() => _loading = true);
@@ -172,6 +200,36 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
                   if (item.letterPosition != null) ...[
                     const SizedBox(height: 12),
                     _PositionBadge(position: item.letterPosition!),
+                  ],
+
+                  // Audio play button
+                  if (item.audioUrl != null) ...[
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isPlaying
+                            ? AppColors.accent
+                            : AppColors.primary.withOpacity(0.1),
+                        foregroundColor:
+                            _isPlaying ? Colors.white : AppColors.primary,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                      ),
+                      onPressed: () => _playAudio(item.audioUrl!),
+                      icon: Icon(
+                        _isPlaying ? Icons.stop : Icons.volume_up,
+                        size: 22,
+                      ),
+                      label: Text(
+                        _isPlaying ? 'Arrêter' : 'Écouter',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   ],
                 ],
               ),
