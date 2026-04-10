@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
-import '../../../core/network/api_client.dart';
+import '../../../core/constants/api_constants.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
 
