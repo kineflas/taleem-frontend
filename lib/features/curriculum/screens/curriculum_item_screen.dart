@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -95,7 +96,7 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
         foregroundColor: Colors.white,
         title: Text(
           item.titleFr ?? item.titleAr,
-          style: const TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: 15),
         ),
         actions: [
           IconButton(
@@ -131,8 +132,8 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
                     textDirection: TextDirection.rtl,
                     child: Text(
                       item.titleAr,
-                      style: const TextStyle(
-                        fontFamily: 'Scheherazade',
+                      style: TextStyle(
+                        fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                         fontSize: 48,
                         height: 1.6,
                         fontWeight: FontWeight.bold,
@@ -159,7 +160,7 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
                     const SizedBox(height: 8),
                     Text(
                       item.titleFr!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                       ),
@@ -193,8 +194,8 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
                   textDirection: TextDirection.rtl,
                   child: Text(
                     item.contentAr!,
-                    style: const TextStyle(
-                      fontFamily: 'Scheherazade',
+                    style: TextStyle(
+                      fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                       fontSize: 20,
                       height: 1.8,
                     ),
@@ -232,7 +233,7 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
                     const SizedBox(height: 10),
                     Text(
                       item.contentFr!,
-                      style: const TextStyle(fontSize: 15, height: 1.6),
+                      style: TextStyle(fontSize: 15, height: 1.6),
                     ),
                   ],
                 ),
@@ -298,7 +299,7 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
                       ),
                 label: Text(
                   _completed ? 'Appris ✅' : "J'ai appris !",
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold),
@@ -396,8 +397,8 @@ class _LetterPills extends StatelessWidget {
         ),
         child: Text(
           l,
-          style: const TextStyle(
-            fontFamily: 'Scheherazade',
+          style: TextStyle(
+            fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
             fontSize: 22,
             color: AppColors.primary,
           ),
@@ -437,7 +438,7 @@ class _SurahReference extends StatelessWidget {
             children: [
               Text(
                 'Sourate $surahNumber',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               if (verseStart != null)
                 Text(

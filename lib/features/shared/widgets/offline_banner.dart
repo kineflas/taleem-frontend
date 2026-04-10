@@ -4,14 +4,14 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 
-final connectivityProvider = StreamProvider<ConnectivityResult>((ref) {
+final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) {
   return Connectivity().onConnectivityChanged;
 });
 
 final isOfflineProvider = Provider<bool>((ref) {
   final conn = ref.watch(connectivityProvider);
   return conn.when(
-    data: (result) => result == ConnectivityResult.none,
+    data: (results) => results.isEmpty || results.every((r) => r == ConnectivityResult.none),
     loading: () => false,
     error: (_, __) => false,
   );

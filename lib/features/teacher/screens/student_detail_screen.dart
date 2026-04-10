@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../providers/teacher_provider.dart';
+import '../../auth/models/user_model.dart';
 import '../../shared/models/task_model.dart';
 import '../../shared/widgets/task_card.dart';
 import '../../shared/widgets/heatmap_widget.dart';

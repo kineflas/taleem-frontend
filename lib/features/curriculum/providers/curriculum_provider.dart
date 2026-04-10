@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
@@ -6,7 +7,7 @@ import '../models/curriculum_model.dart';
 // ── API calls ──────────────────────────────────────────────────────────────
 
 class CurriculumApi {
-  final ApiClient _client;
+  final Dio _client;
   CurriculumApi(this._client);
 
   Future<List<CurriculumProgram>> fetchPrograms() async {
@@ -117,7 +118,7 @@ class CurriculumApi {
 // ── Providers ──────────────────────────────────────────────────────────────
 
 final curriculumApiProvider = Provider<CurriculumApi>(
-  (ref) => CurriculumApi(ref.read(apiClientProvider)),
+  (ref) => CurriculumApi(ref.read(dioProvider)),
 );
 
 // All 5 programs

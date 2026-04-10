@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -52,14 +53,14 @@ class CurriculumProgramScreen extends ConsumerWidget {
                       children: [
                         const SizedBox(height: 60),
                         Text(program.curriculumType.icon,
-                            style: const TextStyle(fontSize: 48)),
+                            style: TextStyle(fontSize: 48)),
                         const SizedBox(height: 8),
                         Text(
                           program.titleAr,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 22,
-                            fontFamily: 'Scheherazade',
+                            fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                           ),
                           textDirection: TextDirection.rtl,
                         ),
@@ -67,7 +68,7 @@ class CurriculumProgramScreen extends ConsumerWidget {
                     ),
                   ),
                   title: Text(program.titleFr,
-                      style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      style: TextStyle(color: Colors.white, fontSize: 16)),
                 ),
                 actions: [
                   IconButton(
@@ -90,7 +91,7 @@ class CurriculumProgramScreen extends ConsumerWidget {
                         children: [
                           Text(
                             '${progress.completedItems} / ${progress.totalItems} éléments',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           Text(
                             '${progress.completionPct.toStringAsFixed(0)} %',
@@ -215,7 +216,7 @@ class _UnitProgressTile extends StatelessWidget {
                   children: [
                     Text(
                       unit.titleFr ?? unit.titleAr,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 14),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -227,7 +228,7 @@ class _UnitProgressTile extends StatelessWidget {
                         unit.titleAr,
                         style: TextStyle(
                             color: AppColors.primary,
-                            fontFamily: 'Scheherazade',
+                            fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                             fontSize: 16),
                       ),
                     ),

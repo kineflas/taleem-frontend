@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -71,7 +72,7 @@ class CurriculumLibraryScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(program.descriptionFr ?? '', style: const TextStyle(fontSize: 14)),
+            Text(program.descriptionFr ?? '', style: TextStyle(fontSize: 14)),
             const SizedBox(height: 12),
             Text('${program.totalUnits} unités', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
           ],
@@ -148,7 +149,7 @@ class _ProgramCard extends StatelessWidget {
                 child: Center(
                   child: Text(
                     program.curriculumType.icon,
-                    style: const TextStyle(fontSize: 28),
+                    style: TextStyle(fontSize: 28),
                   ),
                 ),
               ),
@@ -160,7 +161,7 @@ class _ProgramCard extends StatelessWidget {
                   children: [
                     Text(
                       program.titleFr,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 4),
@@ -169,7 +170,7 @@ class _ProgramCard extends StatelessWidget {
                       style: TextStyle(
                           fontSize: 18,
                           color: AppColors.primary,
-                          fontFamily: 'Scheherazade'),
+                          fontFamily: GoogleFonts.scheherazadeNew().fontFamily),
                       textDirection: TextDirection.rtl,
                     ),
                     const SizedBox(height: 8),
@@ -294,7 +295,7 @@ class _TeacherEnrollmentTile extends StatelessWidget {
       child: ListTile(
         leading: Text(
           enrollment.program.curriculumType.icon,
-          style: const TextStyle(fontSize: 24),
+          style: TextStyle(fontSize: 24),
         ),
         title: Text(enrollment.program.titleFr),
         subtitle: Text(
@@ -324,7 +325,7 @@ class _AssignProgramTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
-        leading: Text(program.curriculumType.icon, style: const TextStyle(fontSize: 24)),
+        leading: Text(program.curriculumType.icon, style: TextStyle(fontSize: 24)),
         title: Text(program.titleFr),
         subtitle: Text('${program.totalUnits} unités'),
         trailing: Consumer(builder: (context, ref, _) {

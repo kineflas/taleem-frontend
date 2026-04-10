@@ -1,9 +1,6 @@
-import 'dart:io';
 import 'package:drift/drift.dart';
-import 'package:drift/native.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'connection/connection.dart';
 
 part 'app_database.g.dart';
 
@@ -63,7 +60,7 @@ class LocalStreak extends Table {
 
 @DriftDatabase(tables: [LocalTasks, PendingSyncs, LocalStreak])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase() : super(openAppDatabase());
 
   @override
   int get schemaVersion => 1;
@@ -104,24 +101,12 @@ class AppDatabase extends _$AppDatabase {
   }
 
   // Streak
-  Future<LocalStreak?> getStreak(String studentId) =>
+  Future<LocalStreakData?> getStreak(String studentId) =>
       (select(localStreak)..where((s) => s.studentId.equals(studentId)))
           .getSingleOrNull();
 
   Future<void> upsertStreak(LocalStreakCompanion streak) =>
       into(localStreak).insertOnConflictUpdate(streak);
-}
-
-LazyDatabase _openConnection() {
-  return LazyDatabase(() async {
-    if (kIsWeb) {
-      // Web: in-memory (not used for offline, but needed for compilation)
-      return NativeDatabase.memory();
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'taliem.db'));
-    return NativeDatabase(file);
-  });
 }
 
 final dbProvider = Provider<AppDatabase>((ref) => AppDatabase());

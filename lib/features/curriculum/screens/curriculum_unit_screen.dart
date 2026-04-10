@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,11 +47,11 @@ class CurriculumUnitScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(unit.titleFr ?? unit.titleAr,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 Text(
                   unit.titleAr,
-                  style: const TextStyle(
-                      fontFamily: 'Scheherazade', fontSize: 14, color: Colors.white70),
+                  style: TextStyle(
+                      fontFamily: GoogleFonts.scheherazadeNew().fontFamily, fontSize: 14, color: Colors.white70),
                   textDirection: TextDirection.rtl,
                 ),
               ],
@@ -70,7 +71,7 @@ class CurriculumUnitScreen extends ConsumerWidget {
                   ),
                   child: Text(
                     unit.descriptionFr!,
-                    style: const TextStyle(fontSize: 14, height: 1.5),
+                    style: TextStyle(fontSize: 14, height: 1.5),
                   ),
                 ),
 
@@ -177,8 +178,8 @@ class _ItemTile extends StatelessWidget {
                       textDirection: TextDirection.rtl,
                       child: Text(
                         item.titleAr,
-                        style: const TextStyle(
-                          fontFamily: 'Scheherazade',
+                        style: TextStyle(
+                          fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),

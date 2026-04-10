@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 
 /// Widget for RTL Arabic text with Amiri font and proper min size.
@@ -25,8 +26,7 @@ class ArabicText extends StatelessWidget {
       child: Text(
         text,
         textAlign: textAlign,
-        style: TextStyle(
-          fontFamily: 'Amiri',
+        style: GoogleFonts.amiri(
           fontSize: fontSize,
           fontWeight: fontWeight,
           color: color ?? AppColors.textPrimary,
@@ -51,8 +51,7 @@ class QuranText extends StatelessWidget {
       child: Text(
         text,
         textAlign: TextAlign.right,
-        style: TextStyle(
-          fontFamily: 'ScheherazadeNew',
+        style: GoogleFonts.scheherazadeNew(
           fontSize: fontSize,
           height: 1.8,
           color: AppColors.textPrimary,

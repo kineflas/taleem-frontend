@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/student_provider.dart';
+import '../../shared/models/task_model.dart';
 import '../../shared/widgets/heatmap_widget.dart';
 import '../../shared/widgets/streak_badge.dart';
 import '../../../core/constants/app_colors.dart';
