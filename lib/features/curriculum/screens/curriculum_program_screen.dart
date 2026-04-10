@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../data/arabic_alphabet_data.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
+import '../widgets/alphabet_intro_card.dart';
 
 /// Screen showing all units of an enrolled program + per-unit progress.
 /// Route: /student/curriculum/:enrollmentId
@@ -115,6 +117,10 @@ class CurriculumProgramScreen extends ConsumerWidget {
                 ),
               ),
 
+              // Intro card (Alphabet only)
+              if (program.curriculumType == CurriculumType.alphabetArabe)
+                const SliverToBoxAdapter(child: AlphabetIntroCard()),
+
               // Units list
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -177,6 +183,7 @@ class _UnitProgressTile extends StatelessWidget {
     final unit = unitProgress.unit;
     final pct = unitProgress.completionPct;
     final isComplete = pct >= 100;
+    final familyIdx = glyphToFamilyIndex[unit.titleAr];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -188,26 +195,41 @@ class _UnitProgressTile extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              // Number badge
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: isComplete ? AppColors.success : AppColors.primary.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: isComplete
-                      ? const Icon(Icons.check, color: Colors.white, size: 22)
-                      : Text(
-                          '${unit.number}',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                ),
+              // Family color dot + number badge
+              Column(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: isComplete ? AppColors.success : AppColors.primary.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: isComplete
+                          ? const Icon(Icons.check, color: Colors.white, size: 22)
+                          : Text(
+                              '${unit.number}',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                    ),
+                  ),
+                  if (familyIdx != null) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: letterFamilies[familyIdx].color,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(width: 14),
               Expanded(
