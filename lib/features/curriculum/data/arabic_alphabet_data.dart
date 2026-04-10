@@ -187,3 +187,411 @@ const Map<String, String> glyphToName = {
 
 /// All 28 letter names for quiz answer generation
 final List<String> allLetterNames = glyphToName.values.toSet().toList();
+
+// ── Pronunciation guide ────────────────────────────────────────────────────
+
+enum PronunciationDifficulty { easy, medium, hard, expert }
+
+class LetterPronunciation {
+  final String letterName;
+  final PronunciationDifficulty difficulty;
+  final String categoryFr; // e.g. "Lettre familière", "Son de gorge"
+  final String equivalentFr; // short summary: "Comme le B de Bateau"
+  final String? equivalentLanguage; // e.g. "anglais", "espagnol"
+  final String descriptionFr; // detailed explanation
+  final String? astuceFr; // practical tip
+  final String? erreurFr; // common mistake
+  final String? paireFr; // minimal pair comparison
+
+  const LetterPronunciation({
+    required this.letterName,
+    required this.difficulty,
+    required this.categoryFr,
+    required this.equivalentFr,
+    this.equivalentLanguage,
+    required this.descriptionFr,
+    this.astuceFr,
+    this.erreurFr,
+    this.paireFr,
+  });
+}
+
+const Map<String, LetterPronunciation> letterPronunciations = {
+  // ── 1. Lettres familières ──────────────────────────────────────────────
+
+  'ا': LetterPronunciation(
+    letterName: 'Alif',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Semi-voyelle',
+    equivalentFr: 'Support de voyelle ou A long',
+    descriptionFr:
+        'L\'Alif ne produit pas de son consonantique propre. Il sert de '
+        'support pour les voyelles ou marque un A long, comme dans « pâte ».',
+    astuceFr:
+        'L\'Alif porte aussi le hamza (ء), le petit coup de glotte qu\'on '
+        'entend entre les deux voyelles de « co-opérer ».',
+  ),
+
+  'ب': LetterPronunciation(
+    letterName: 'Ba',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le B français',
+    descriptionFr:
+        'Identique au B de « Bateau », « Bébé ». Aucune difficulté.',
+  ),
+
+  'ت': LetterPronunciation(
+    letterName: 'Ta',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le T français',
+    descriptionFr:
+        'Identique au T de « Table ». En arabe, le T est dental : '
+        'la langue touche les dents, pas le palais.',
+    astuceFr:
+        'Ne pas confondre avec le ط (Ta emphatique) qui est plus '
+        'lourd et grave.',
+    paireFr: 'ت (léger) ↔ ط (lourd)',
+  ),
+
+  'ث': LetterPronunciation(
+    letterName: 'Tha',
+    difficulty: PronunciationDifficulty.medium,
+    categoryFr: 'Interdentale',
+    equivalentFr: 'Comme le TH anglais de « Think »',
+    equivalentLanguage: 'anglais',
+    descriptionFr:
+        'Placez le bout de la langue entre les incisives supérieures '
+        'et inférieures, puis soufflez. C\'est le TH sourd anglais '
+        'comme dans « three », « think », « math ».',
+    astuceFr:
+        'Posez vos doigts sur votre gorge : vous ne devez sentir '
+        'aucune vibration (contrairement au ذ).',
+    paireFr: 'ث (sourd, « think ») ↔ ذ (sonore, « this »)',
+  ),
+
+  'ج': LetterPronunciation(
+    letterName: 'Jim',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Chuintante',
+    equivalentFr: 'Comme DJ dans « Djebel »',
+    descriptionFr:
+        'Proche du DJ de « Django », « Adjoint ». Bien marquer le D '
+        'initial : c\'est « dj » et non le J français de « Jour ».',
+    erreurFr:
+        'Ne pas prononcer comme un simple J français. Le ج commence '
+        'toujours par un léger D.',
+  ),
+
+  'ح': LetterPronunciation(
+    letterName: 'Ha profond',
+    difficulty: PronunciationDifficulty.expert,
+    categoryFr: 'Son de gorge',
+    equivalentFr: 'H très appuyé, plus profond que le ه',
+    descriptionFr:
+        'Le son vient du milieu de la gorge (pharynx). Imaginez que '
+        'vous expirez très fort par temps glacial, ou que vous soufflez '
+        'sur vos lunettes pour les nettoyer — mais beaucoup plus fort.',
+    astuceFr:
+        'Mettez votre main devant la bouche : vous devez sentir un '
+        'souffle chaud et puissant. Si vous ne sentez rien, vous faites '
+        'un ه (trop léger). Le ح est un effort, le ه est un murmure.',
+    erreurFr:
+        'Ne pas confondre avec le خ (Kha). Le ح est un souffle pur, '
+        'sans aucun frottement ni raclement.',
+    paireFr: 'ح (souffle pur) ↔ خ (frottement, raclement)',
+  ),
+
+  'خ': LetterPronunciation(
+    letterName: 'Kha',
+    difficulty: PronunciationDifficulty.hard,
+    categoryFr: 'Son de gorge',
+    equivalentFr: 'Comme la Jota espagnole (« Juan »)',
+    equivalentLanguage: 'espagnol / allemand',
+    descriptionFr:
+        'Un frottement au fond de la bouche, entre le voile du palais '
+        'et la luette. Comme le J espagnol de « Juan », « jamón », ou '
+        'le « ch » allemand de « Bach ».',
+    astuceFr:
+        'Commencez par prononcer un K, puis relâchez la langue pour '
+        'laisser l\'air frotter. Pensez au bruit d\'un chat qui crache.',
+    erreurFr:
+        'Ne pas confondre avec le R français. Le خ est plus sec et '
+        'plus en arrière.',
+  ),
+
+  'د': LetterPronunciation(
+    letterName: 'Dal',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le D français',
+    descriptionFr:
+        'Identique au D de « Dimanche ». En arabe, le D est dental : '
+        'la langue touche les dents du haut.',
+    paireFr: 'د (léger) ↔ ض (lourd, emphatique)',
+  ),
+
+  'ذ': LetterPronunciation(
+    letterName: 'Dhal',
+    difficulty: PronunciationDifficulty.medium,
+    categoryFr: 'Interdentale',
+    equivalentFr: 'Comme le TH anglais de « This »',
+    equivalentLanguage: 'anglais',
+    descriptionFr:
+        'Même position que le ث (langue entre les dents) mais en version '
+        'sonore. Comme le TH anglais de « This », « That », « The ».',
+    astuceFr:
+        'La différence entre ث et ذ est la même qu\'entre S et Z : '
+        'l\'un est sourd (sans vibration), l\'autre sonore (avec vibration). '
+        'Posez vos doigts sur votre gorge pour sentir la différence.',
+    paireFr: 'ث (sourd) ↔ ذ (sonore)',
+  ),
+
+  'ر': LetterPronunciation(
+    letterName: 'Ra',
+    difficulty: PronunciationDifficulty.medium,
+    categoryFr: 'R roulé',
+    equivalentFr: 'R roulé espagnol / italien',
+    equivalentLanguage: 'espagnol / italien',
+    descriptionFr:
+        'Un R roulé avec la pointe de la langue, comme le R espagnol '
+        'de « Ramos », le R italien de « Roma », ou le R roulé des '
+        'régions du sud de la France.',
+    astuceFr:
+        'La pointe de la langue tape rapidement contre la crête '
+        'alvéolaire (juste derrière les dents du haut). Entraînez-vous '
+        'en répétant rapidement « d-d-d-d » puis en laissant la langue vibrer.',
+    erreurFr:
+        'Ne jamais utiliser le R guttural parisien (celui du fond de '
+        'la gorge). En arabe, ce son-là correspond au غ (Ghayn).',
+  ),
+
+  'ز': LetterPronunciation(
+    letterName: 'Zay',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Sifflante',
+    equivalentFr: 'Comme le Z français',
+    descriptionFr:
+        'Identique au Z de « Zèbre », « Zoo ». Aucune difficulté.',
+  ),
+
+  'س': LetterPronunciation(
+    letterName: 'Sin',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Sifflante',
+    equivalentFr: 'Comme le S français',
+    descriptionFr:
+        'Identique au S de « Soleil », « Serpent ». Un S sourd et léger.',
+    paireFr: 'س (léger) ↔ ص (lourd, emphatique)',
+  ),
+
+  'ش': LetterPronunciation(
+    letterName: 'Shin',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Chuintante',
+    equivalentFr: 'Comme le CH français',
+    descriptionFr:
+        'Identique au CH de « Chat », « Chien ». Aucune difficulté.',
+  ),
+
+  'ص': LetterPronunciation(
+    letterName: 'Sad',
+    difficulty: PronunciationDifficulty.expert,
+    categoryFr: 'Emphatique',
+    equivalentFr: 'S lourd et grave (version emphatique de س)',
+    descriptionFr:
+        'Un S grave et sourd. Pour le produire : appuyez le milieu '
+        'de la langue contre le palais, arrondissez les lèvres comme '
+        'pour dire « O », puis prononcez un S — il sortira plus grave.',
+    astuceFr:
+        'Comparez « si » (léger, avec س) et « so » (lourd, arrondi, '
+        'avec ص). Les emphatiques « assombrissent » les voyelles autour '
+        'd\'elles : un « a » à côté d\'un ص sonne presque comme un « o ».',
+    paireFr: 'س (léger, « si ») ↔ ص (lourd, « so »)',
+  ),
+
+  'ض': LetterPronunciation(
+    letterName: 'Dad',
+    difficulty: PronunciationDifficulty.expert,
+    categoryFr: 'Emphatique',
+    equivalentFr: 'D lourd (version emphatique de د)',
+    descriptionFr:
+        'Un D lourd et grave. On appuie les côtés de la langue contre '
+        'les molaires supérieures. L\'arabe est surnommé « la langue du ض » '
+        'car ce son est considéré comme unique à l\'arabe.',
+    astuceFr:
+        'Technique : appuyez le milieu de la langue contre le palais, '
+        'arrondissez les lèvres, puis prononcez un D. Alternez : '
+        '« da - ḍa - da - ḍa » pour entraîner votre oreille.',
+    paireFr: 'د (léger) ↔ ض (lourd)',
+  ),
+
+  'ط': LetterPronunciation(
+    letterName: 'Ta emphatique',
+    difficulty: PronunciationDifficulty.expert,
+    categoryFr: 'Emphatique',
+    equivalentFr: 'T lourd et sec (version emphatique de ت)',
+    descriptionFr:
+        'Un T lourd et sec. La langue claque contre le palais avec '
+        'plus de masse. Même technique que les autres emphatiques : '
+        'langue contre le palais, lèvres arrondies.',
+    astuceFr:
+        'Alternez « ta - ṭa - ta - ṭa » pour bien sentir la différence. '
+        'Le ط donne une impression de son « creux » et résonant.',
+    paireFr: 'ت (léger) ↔ ط (lourd)',
+  ),
+
+  'ظ': LetterPronunciation(
+    letterName: 'Dha emphatique',
+    difficulty: PronunciationDifficulty.expert,
+    categoryFr: 'Emphatique',
+    equivalentFr: 'TH lourd (version emphatique de ذ)',
+    descriptionFr:
+        'Un TH sonore lourd. Même position interdentale que le ذ '
+        '(langue entre les dents), mais avec la langue gonflée contre '
+        'le palais et le son assombri.',
+    astuceFr:
+        'Pensez à un ذ (« this » en anglais) mais prononcé avec une '
+        'voix plus grave et les lèvres arrondies.',
+    paireFr: 'ذ (léger) ↔ ظ (lourd)',
+  ),
+
+  'ع': LetterPronunciation(
+    letterName: 'Ayn',
+    difficulty: PronunciationDifficulty.expert,
+    categoryFr: 'Son de gorge',
+    equivalentFr: 'Aucun équivalent européen',
+    descriptionFr:
+        'LE son le plus difficile pour les francophones. C\'est une '
+        'contraction musculaire de la gorge : le pharynx se resserre, '
+        'comme si on étranglait momentanément le passage de l\'air.',
+    astuceFr:
+        'Imaginez le son réflexe quand on soulève un objet très lourd, '
+        'ou une exclamation « Ah ! » de surprise douloureuse qui vient '
+        'du ventre. Dites « aaa » normalement, puis serrez votre gorge '
+        'au milieu du son : le moment où ça se resserre, c\'est le ع.',
+    erreurFr:
+        'Ne pas remplacer par un simple A ou par un coup de glotte. '
+        'Le ع demande un vrai effort musculaire de la gorge.',
+  ),
+
+  'غ': LetterPronunciation(
+    letterName: 'Ghayn',
+    difficulty: PronunciationDifficulty.medium,
+    categoryFr: 'Son de gorge',
+    equivalentFr: 'Le R grasseyé français !',
+    descriptionFr:
+        'Bonne nouvelle : c\'est le son le plus facile de cette catégorie '
+        'pour un francophone ! C\'est votre R quotidien : le R de « Rat », '
+        '« Rien », « Paris ». Un frottement de la luette.',
+    astuceFr:
+        'Prononcez « garage » en français : le R que vous faites, c\'est '
+        'exactement le غ arabe. En arabe, le R (ر) est roulé (espagnol), '
+        'donc le غ occupe la niche du R français. Vous avez un avantage '
+        'sur les anglophones : ce son est natif pour vous !',
+  ),
+
+  'ف': LetterPronunciation(
+    letterName: 'Fa',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le F français',
+    descriptionFr:
+        'Identique au F de « Fleur », « France ». Aucune difficulté.',
+  ),
+
+  'ق': LetterPronunciation(
+    letterName: 'Qaf',
+    difficulty: PronunciationDifficulty.hard,
+    categoryFr: 'K profond',
+    equivalentFr: 'Un K prononcé au niveau de la luette',
+    descriptionFr:
+        'Un K articulé très en arrière, au niveau de la luette. Le son '
+        'est plus « creux » et résonne dans la gorge, comme le croassement '
+        'd\'un corbeau.',
+    astuceFr:
+        'Dites un K normal, puis reculez progressivement le point de '
+        'contact de la langue vers l\'arrière de la bouche, jusqu\'à '
+        'toucher la luette. Alternez : « ka - qa - ka - qa » pour sentir '
+        'la différence.',
+    paireFr: 'ك (léger, en avant) ↔ ق (lourd, en arrière)',
+  ),
+
+  'ك': LetterPronunciation(
+    letterName: 'Kaf',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le K français',
+    descriptionFr:
+        'Identique au K de « Kilo », « Karaté ». Aucune difficulté.',
+    paireFr: 'ك (léger) ↔ ق (lourd, profond)',
+  ),
+
+  'ل': LetterPronunciation(
+    letterName: 'Lam',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le L français',
+    descriptionFr:
+        'Identique au L de « Lune », « Lumière ». Aucune difficulté.',
+  ),
+
+  'م': LetterPronunciation(
+    letterName: 'Mim',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le M français',
+    descriptionFr:
+        'Identique au M de « Maman », « Maison ». Aucune difficulté.',
+  ),
+
+  'ن': LetterPronunciation(
+    letterName: 'Nun',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Lettre familière',
+    equivalentFr: 'Comme le N français',
+    descriptionFr:
+        'Identique au N de « Nuage », « Nature ». Aucune difficulté.',
+  ),
+
+  'ه': LetterPronunciation(
+    letterName: 'Ha',
+    difficulty: PronunciationDifficulty.medium,
+    categoryFr: 'H aspiré',
+    equivalentFr: 'Comme le H anglais de « Hello »',
+    equivalentLanguage: 'anglais',
+    descriptionFr:
+        'Un souffle léger qui vient du fond de la gorge, comme le H '
+        'anglais de « Hello », « House », « Happy ». Ou comme quand '
+        'on fait de la buée sur une vitre.',
+    astuceFr:
+        'Les francophones ont tendance à ne pas le prononcer du tout '
+        '(car le H est muet en français). Il faut s\'entraîner à bien '
+        'le souffler à chaque fois.',
+    erreurFr:
+        'Ne pas confondre avec le ح (Ha profond) qui est beaucoup plus '
+        'appuyé et vient de plus profond dans la gorge.',
+    paireFr: 'ه (souffle léger) ↔ ح (souffle profond)',
+  ),
+
+  'و': LetterPronunciation(
+    letterName: 'Waw',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Semi-voyelle',
+    equivalentFr: 'Comme le W ou OU français',
+    descriptionFr:
+        'Comme le W de « Week-end » (anglais) ou le OU de « Oui ». '
+        'Peut aussi servir de voyelle longue « OU ».',
+  ),
+
+  'ي': LetterPronunciation(
+    letterName: 'Ya',
+    difficulty: PronunciationDifficulty.easy,
+    categoryFr: 'Semi-voyelle',
+    equivalentFr: 'Comme le Y ou I français',
+    descriptionFr:
+        'Comme le Y de « Yoga » ou le I de « Ici ». Peut aussi servir '
+        'de voyelle longue « I ».',
+  ),
+};

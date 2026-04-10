@@ -10,6 +10,7 @@ import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
 import '../widgets/letter_forms_preview.dart';
 import '../widgets/letter_family_chip.dart';
+import '../widgets/letter_pronunciation_card.dart';
 import '../widgets/letter_quiz_widget.dart';
 
 /// Screen listing all items in a unit with completion badges.
@@ -184,6 +185,9 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
                         ],
                       ),
                     ),
+
+                  // Pronunciation guide
+                  LetterPronunciationCard(glyph: unit.titleAr),
 
                   // 4 forms preview
                   if (letterItems.length == 4)
