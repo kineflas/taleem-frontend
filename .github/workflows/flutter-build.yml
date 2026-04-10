@@ -1,0 +1,171 @@
+name: Flutter Build & Deploy
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+
+defaults:
+  run:
+    working-directory: frontend
+
+jobs:
+  # ─── Code Quality ─────────────────────────────────────────────────────────
+  analyze:
+    name: Analyze & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate code (drift, riverpod)
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Format check
+        run: dart format --set-exit-if-changed lib/
+
+  # ─── Tests ────────────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate code
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Run tests
+        run: flutter test
+
+  # ─── Web Build & Deploy ───────────────────────────────────────────────────
+  build-web:
+    name: Build Flutter Web
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate code
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Download Arabic fonts
+        run: |
+          mkdir -p assets/fonts
+          curl -L "https://github.com/aliftype/amiri/releases/download/1.000/Amiri-1.000.zip" -o amiri.zip
+          unzip -j amiri.zip "*.ttf" -d assets/fonts/ || true
+
+      - name: Build Flutter Web
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          flutter build web \
+            --release \
+            --dart-define=API_BASE_URL=$API_BASE_URL \
+            --web-renderer canvaskit
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web
+          path: frontend/build/web/
+          retention-days: 7
+
+  # ─── Android Build ────────────────────────────────────────────────────────
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate code
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+
+      - name: Download fonts
+        run: |
+          mkdir -p assets/fonts
+          # Add font download steps here
+
+      - name: Build Android APK
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          flutter build apk \
+            --release \
+            --dart-define=API_BASE_URL=$API_BASE_URL
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: frontend/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
+
+  # ─── Coolify Deploy (Web) ─────────────────────────────────────────────────
+  deploy-coolify:
+    name: Deploy to Coolify
+    runs-on: ubuntu-latest
+    needs: build-web
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Coolify Deploy
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_WEBHOOK_TOKEN }}" \
+            "${{ secrets.COOLIFY_WEBHOOK_URL }}"

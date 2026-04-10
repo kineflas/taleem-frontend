@@ -1,0 +1,358 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/constants/app_colors.dart';
+import '../models/curriculum_model.dart';
+import '../providers/curriculum_provider.dart';
+
+/// Student Library Screen — lists all 5 programs with enrollment status.
+/// Accessible from the student bottom navigation (new "Parcours" tab).
+class CurriculumLibraryScreen extends ConsumerWidget {
+  const CurriculumLibraryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final programsAsync = ref.watch(curriculumProgramsProvider);
+    final enrollmentsAsync = ref.watch(myEnrollmentsProvider);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Mes Parcours', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: programsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Erreur : $e')),
+        data: (programs) {
+          final enrollments = enrollmentsAsync.valueOrNull ?? [];
+          final enrolledIds = {for (final e in enrollments) e.curriculumProgramId};
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: programs.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final program = programs[index];
+              final isEnrolled = enrolledIds.contains(program.id);
+              final enrollment = isEnrolled
+                  ? enrollments.firstWhere((e) => e.curriculumProgramId == program.id)
+                  : null;
+
+              return _ProgramCard(
+                program: program,
+                isEnrolled: isEnrolled,
+                enrollment: enrollment,
+                onTap: () {
+                  if (isEnrolled && enrollment != null) {
+                    context.push('/student/curriculum/${enrollment.id}');
+                  } else {
+                    _showEnrollDialog(context, ref, program);
+                  }
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  void _showEnrollDialog(
+      BuildContext context, WidgetRef ref, CurriculumProgram program) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(program.titleFr),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(program.descriptionFr ?? '', style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 12),
+            Text('${program.totalUnits} unités', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await ref.read(curriculumApiProvider).enroll(program.id);
+                ref.invalidate(myEnrollmentsProvider);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Inscrit à ${program.titleFr} !'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
+            },
+            child: const Text("S'inscrire", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgramCard extends StatelessWidget {
+  final CurriculumProgram program;
+  final bool isEnrolled;
+  final StudentEnrollment? enrollment;
+  final VoidCallback onTap;
+
+  const _ProgramCard({
+    required this.program,
+    required this.isEnrolled,
+    required this.enrollment,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    program.curriculumType.icon,
+                    style: const TextStyle(fontSize: 28),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      program.titleFr,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      program.titleAr,
+                      style: TextStyle(
+                          fontSize: 18,
+                          color: AppColors.primary,
+                          fontFamily: 'Scheherazade'),
+                      textDirection: TextDirection.rtl,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${program.totalUnits} unités',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    ),
+                    if (isEnrolled) ...[
+                      const SizedBox(height: 8),
+                      const _EnrollmentBadge(),
+                    ],
+                  ],
+                ),
+              ),
+              // Arrow
+              Icon(
+                isEnrolled ? Icons.arrow_forward_ios : Icons.add_circle_outline,
+                color: isEnrolled ? AppColors.primary : AppColors.accent,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EnrollmentBadge extends StatelessWidget {
+  const _EnrollmentBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(Icons.check_circle, size: 14, color: AppColors.success),
+        const SizedBox(width: 4),
+        Text(
+          'En cours',
+          style: TextStyle(
+              color: AppColors.success,
+              fontSize: 12,
+              fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+}
+
+
+/// Teacher — Student Curriculum Tab
+/// Shown inside the StudentDetailScreen as a tab.
+class TeacherStudentCurriculumTab extends ConsumerWidget {
+  final String studentId;
+
+  const TeacherStudentCurriculumTab({super.key, required this.studentId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enrollmentsAsync = ref.watch(studentEnrollmentsProvider(studentId));
+    final programsAsync = ref.watch(curriculumProgramsProvider);
+
+    return enrollmentsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Erreur : $e')),
+      data: (enrollments) {
+        final programs = programsAsync.valueOrNull ?? [];
+        final enrolledIds = {for (final e in enrollments) e.curriculumProgramId};
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Enrolled programs
+              if (enrollments.isNotEmpty) ...[
+                Text('Programmes en cours',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...enrollments.map((e) => _TeacherEnrollmentTile(
+                  enrollment: e,
+                  studentId: studentId,
+                )),
+                const SizedBox(height: 20),
+              ],
+
+              // Available programs to assign
+              Text('Assigner un programme',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ...programs
+                  .where((p) => !enrolledIds.contains(p.id))
+                  .map((p) => _AssignProgramTile(
+                    program: p,
+                    studentId: studentId,
+                    onAssigned: () => ref.invalidate(studentEnrollmentsProvider(studentId)),
+                  )),
+              if (programs.where((p) => !enrolledIds.contains(p.id)).isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('L\'élève est inscrit à tous les programmes disponibles.'),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TeacherEnrollmentTile extends StatelessWidget {
+  final StudentEnrollment enrollment;
+  final String studentId;
+
+  const _TeacherEnrollmentTile({required this.enrollment, required this.studentId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Text(
+          enrollment.program.curriculumType.icon,
+          style: const TextStyle(fontSize: 24),
+        ),
+        title: Text(enrollment.program.titleFr),
+        subtitle: Text(
+          enrollment.mode == EnrollmentMode.teacherAssigned ? 'Assigné par vous' : 'Autonome',
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () => context.push(
+            '/teacher/students/$studentId/curriculum/${enrollment.id}'),
+      ),
+    );
+  }
+}
+
+class _AssignProgramTile extends StatelessWidget {
+  final CurriculumProgram program;
+  final String studentId;
+  final VoidCallback onAssigned;
+
+  const _AssignProgramTile({
+    required this.program,
+    required this.studentId,
+    required this.onAssigned,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Text(program.curriculumType.icon, style: const TextStyle(fontSize: 24)),
+        title: Text(program.titleFr),
+        subtitle: Text('${program.totalUnits} unités'),
+        trailing: Consumer(builder: (context, ref, _) {
+          return IconButton(
+            icon: const Icon(Icons.add_circle, color: AppColors.primary),
+            onPressed: () async {
+              try {
+                await ref.read(curriculumApiProvider).teacherEnroll(studentId, program.id);
+                onAssigned();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${program.titleFr} assigné !'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
+            },
+          );
+        }),
+      ),
+    );
+  }
+}
