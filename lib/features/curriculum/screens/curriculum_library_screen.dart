@@ -32,30 +32,55 @@ class CurriculumLibraryScreen extends ConsumerWidget {
           final enrollments = enrollmentsAsync.valueOrNull ?? [];
           final enrolledIds = {for (final e in enrollments) e.curriculumProgramId};
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: programs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final program = programs[index];
-              final isEnrolled = enrolledIds.contains(program.id);
-              final enrollment = isEnrolled
-                  ? enrollments.firstWhere((e) => e.curriculumProgramId == program.id)
-                  : null;
+          // Group programs by category, preserving sort order
+          final grouped = <ProgramCategory, List<CurriculumProgram>>{};
+          for (final p in programs) {
+            grouped.putIfAbsent(p.category, () => []).add(p);
+          }
+          // Order categories
+          final categoryOrder = [
+            ProgramCategory.apprendreALire,
+            ProgramCategory.comprendreArabe,
+            ProgramCategory.coran,
+          ];
+          final orderedCategories =
+              categoryOrder.where((c) => grouped.containsKey(c)).toList();
 
-              return _ProgramCard(
-                program: program,
-                isEnrolled: isEnrolled,
-                enrollment: enrollment,
-                onTap: () {
-                  if (isEnrolled && enrollment != null) {
-                    context.push('/student/curriculum/${enrollment.id}');
-                  } else {
-                    _showEnrollDialog(context, ref, program);
-                  }
-                },
-              );
-            },
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final cat in orderedCategories) ...[
+                  _CategoryHeader(category: cat),
+                  const SizedBox(height: 10),
+                  ...grouped[cat]!.map((program) {
+                    final isEnrolled = enrolledIds.contains(program.id);
+                    final enrollment = isEnrolled
+                        ? enrollments.firstWhere(
+                            (e) => e.curriculumProgramId == program.id)
+                        : null;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _ProgramCard(
+                        program: program,
+                        isEnrolled: isEnrolled,
+                        enrollment: enrollment,
+                        onTap: () {
+                          if (isEnrolled && enrollment != null) {
+                            context.push(
+                                '/student/curriculum/${enrollment.id}');
+                          } else {
+                            _showEnrollDialog(context, ref, program);
+                          }
+                        },
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+              ],
+            ),
           );
         },
       ),
@@ -104,6 +129,37 @@ class CurriculumLibraryScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CategoryHeader extends StatelessWidget {
+  final ProgramCategory category;
+
+  const _CategoryHeader({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: category.color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(category.icon, color: category.color, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          category.titleFr,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: category.color,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -251,17 +307,15 @@ class TeacherStudentCurriculumTab extends ConsumerWidget {
                 const SizedBox(height: 20),
               ],
 
-              // Available programs to assign
+              // Available programs to assign (grouped by category)
               Text('Assigner un programme',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              ...programs
-                  .where((p) => !enrolledIds.contains(p.id))
-                  .map((p) => _AssignProgramTile(
-                    program: p,
-                    studentId: studentId,
-                    onAssigned: () => ref.invalidate(studentEnrollmentsProvider(studentId)),
-                  )),
+              ..._buildGroupedAssignList(
+                programs.where((p) => !enrolledIds.contains(p.id)).toList(),
+                studentId,
+                ref,
+              ),
               if (programs.where((p) => !enrolledIds.contains(p.id)).isEmpty)
                 const Center(
                   child: Padding(
@@ -274,6 +328,40 @@ class TeacherStudentCurriculumTab extends ConsumerWidget {
         );
       },
     );
+  }
+
+  List<Widget> _buildGroupedAssignList(
+      List<CurriculumProgram> available, String studentId, WidgetRef ref) {
+    final grouped = <ProgramCategory, List<CurriculumProgram>>{};
+    for (final p in available) {
+      grouped.putIfAbsent(p.category, () => []).add(p);
+    }
+    final categoryOrder = [
+      ProgramCategory.apprendreALire,
+      ProgramCategory.comprendreArabe,
+      ProgramCategory.coran,
+    ];
+    final widgets = <Widget>[];
+    for (final cat in categoryOrder) {
+      if (!grouped.containsKey(cat)) continue;
+      widgets.add(Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Text(cat.titleFr,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cat.color)),
+      ));
+      for (final p in grouped[cat]!) {
+        widgets.add(_AssignProgramTile(
+          program: p,
+          studentId: studentId,
+          onAssigned: () =>
+              ref.invalidate(studentEnrollmentsProvider(studentId)),
+        ));
+      }
+    }
+    return widgets;
   }
 }
 

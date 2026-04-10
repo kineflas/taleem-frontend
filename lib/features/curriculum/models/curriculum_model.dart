@@ -1,7 +1,48 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+enum ProgramCategory {
+  apprendreALire,
+  comprendreArabe,
+  coran;
+
+  static ProgramCategory fromApi(String v) {
+    switch (v) {
+      case 'APPRENDRE_A_LIRE': return apprendreALire;
+      case 'COMPRENDRE_ARABE': return comprendreArabe;
+      case 'CORAN': return coran;
+      default: return apprendreALire;
+    }
+  }
+
+  String get titleFr {
+    switch (this) {
+      case ProgramCategory.apprendreALire: return 'Apprendre à lire';
+      case ProgramCategory.comprendreArabe: return "Comprendre l'arabe";
+      case ProgramCategory.coran: return 'Lire et Apprendre le Coran';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case ProgramCategory.apprendreALire: return Icons.menu_book;
+      case ProgramCategory.comprendreArabe: return Icons.school;
+      case ProgramCategory.coran: return Icons.auto_stories;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case ProgramCategory.apprendreALire: return const Color(0xFF2196F3);
+      case ProgramCategory.comprendreArabe: return const Color(0xFF4CAF50);
+      case ProgramCategory.coran: return const Color(0xFF9C27B0);
+    }
+  }
+}
 
 enum CurriculumType {
   alphabetArabe,
+  voyellesSyllabes,
   qaidaNourania,
   medineT1,
   tajwid,
@@ -10,6 +51,7 @@ enum CurriculumType {
   String get apiValue {
     switch (this) {
       case CurriculumType.alphabetArabe: return 'ALPHABET_ARABE';
+      case CurriculumType.voyellesSyllabes: return 'VOYELLES_SYLLABES';
       case CurriculumType.qaidaNourania: return 'QAIDA_NOURANIA';
       case CurriculumType.medineT1: return 'MEDINE_T1';
       case CurriculumType.tajwid: return 'TAJWID';
@@ -25,6 +67,7 @@ enum CurriculumType {
   String get icon {
     switch (this) {
       case CurriculumType.alphabetArabe: return '🔤';
+      case CurriculumType.voyellesSyllabes: return '🗣️';
       case CurriculumType.qaidaNourania: return '📖';
       case CurriculumType.medineT1: return '🎓';
       case CurriculumType.tajwid: return '🎵';
@@ -80,6 +123,7 @@ enum SubmissionStatus { pendingReview, approved, needsImprovement, rejected;
 class CurriculumProgram {
   final String id;
   final CurriculumType curriculumType;
+  final ProgramCategory category;
   final String titleAr;
   final String titleFr;
   final String? descriptionFr;
@@ -91,6 +135,7 @@ class CurriculumProgram {
   const CurriculumProgram({
     required this.id,
     required this.curriculumType,
+    required this.category,
     required this.titleAr,
     required this.titleFr,
     this.descriptionFr,
@@ -103,6 +148,7 @@ class CurriculumProgram {
   factory CurriculumProgram.fromJson(Map<String, dynamic> j) => CurriculumProgram(
     id: j['id'],
     curriculumType: CurriculumType.fromApi(j['curriculum_type']),
+    category: ProgramCategory.fromApi(j['category'] ?? 'APPRENDRE_A_LIRE'),
     titleAr: j['title_ar'],
     titleFr: j['title_fr'],
     descriptionFr: j['description_fr'],
