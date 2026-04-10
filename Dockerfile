@@ -1,21 +1,15 @@
 # ─── Stage 1: Build Flutter Web ─────────────────────────────────────────────
-FROM ghcr.io/cirruslabs/flutter:3.22.0 AS builder
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
 
 WORKDIR /app
 COPY . .
 
-# Download Arabic fonts
-RUN mkdir -p assets/fonts && \
-    apt-get update && apt-get install -y wget unzip && \
-    wget -q "https://github.com/aliftype/amiri/releases/download/1.000/Amiri-1.000.zip" -O amiri.zip && \
-    unzip -j amiri.zip "*.ttf" -d assets/fonts/ && \
-    rm amiri.zip
+ARG API_BASE_URL=https://api.taleem.cksyndic.ma
 
 RUN flutter pub get
-RUN flutter pub run build_runner build --delete-conflicting-outputs
-RUN flutter build web --release \
-    --dart-define=API_BASE_URL=${API_BASE_URL} \
-    --web-renderer canvaskit
+RUN dart run build_runner build --delete-conflicting-outputs
+RUN flutter build web --release --no-tree-shake-icons \
+    --dart-define=API_BASE_URL=${API_BASE_URL}
 
 # ─── Stage 2: Serve with nginx ───────────────────────────────────────────────
 FROM nginx:alpine
