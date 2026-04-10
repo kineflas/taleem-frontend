@@ -40,4 +40,25 @@ class ApiConstants {
 
   // Notifications
   static const String notifications = '/notifications';
+
+  // Autonomous Learning
+  static const String learnWords = '/learn/words';
+  static const String learnRoots = '/learn/roots';
+  static const String learnChunks = '/learn/chunks';
+  static const String studentLearnModules = '/student/learn/modules';
+  static const String studentLearnSrsDue = '/student/learn/srs/due';
+  static const String studentLearnSrsReview = '/student/learn/srs/review';
+  static const String studentLearnSrsStats = '/student/learn/srs/stats';
+  static const String studentLearnSessions = '/student/learn/sessions';
+  static const String studentLearnFlashRecall = '/student/learn/exercises/flash-recall';
+  static const String studentLearnRootIntruder = '/student/learn/exercises/root-intruder';
+  static const String studentLearnVerseScan = '/student/learn/exercises/verse-scan';
+
+  // Hifz Master
+  static const String studentHifzGoals = '/student/hifz/goals';
+  static const String studentHifzSessions = '/student/hifz/sessions';
+  static const String studentHifzVersesDue = '/student/hifz/verses/due';
+  static const String studentHifzVersesReview = '/student/hifz/verses/review';
+  static const String studentHifzXp = '/student/hifz/xp';
+  static const String studentHifzReciters = '/student/hifz/reciters';
 }

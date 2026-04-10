@@ -19,6 +19,18 @@ import '../../features/curriculum/screens/curriculum_library_screen.dart';
 import '../../features/curriculum/screens/curriculum_program_screen.dart';
 import '../../features/curriculum/screens/curriculum_unit_screen.dart';
 import '../../features/curriculum/screens/curriculum_item_screen.dart';
+import '../../features/autonomous_learning/screens/learning_hub_screen.dart';
+import '../../features/autonomous_learning/screens/module_detail_screen.dart';
+import '../../features/autonomous_learning/screens/flash_recall_screen.dart';
+import '../../features/autonomous_learning/screens/spatial_particles_screen.dart';
+import '../../features/autonomous_learning/screens/chunking_screen.dart';
+import '../../features/autonomous_learning/screens/root_discovery_screen.dart';
+import '../../features/autonomous_learning/screens/verse_scan_screen.dart';
+import '../../features/hifz/screens/hifz_hub_screen.dart';
+import '../../features/hifz/screens/hifz_goal_create_screen.dart';
+import '../../features/hifz/screens/hifz_session_screen.dart';
+import '../../features/hifz/screens/hifz_revision_screen.dart';
+import '../../features/hifz/screens/surah_heatmap_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -86,6 +98,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/student/agenda', builder: (_, __) => const AgendaScreen()),
           GoRoute(path: '/student/progress', builder: (_, __) => const ProgressScreen()),
           GoRoute(path: '/student/curriculum', builder: (_, __) => const CurriculumLibraryScreen()),
+          GoRoute(path: '/student/learn', builder: (_, __) => const LearningHubScreen()),
+          GoRoute(path: '/student/hifz', builder: (_, __) => const HifzHubScreen()),
           GoRoute(path: '/student/settings', builder: (_, __) => const StudentSettingsScreen()),
         ],
       ),
@@ -112,6 +126,56 @@ final routerProvider = Provider<GoRouter>((ref) {
             ),
           ),
         ],
+      ),
+
+      // Autonomous Learning deep routes (full screen exercises)
+      GoRoute(
+        path: '/learn/module/:moduleNumber',
+        builder: (ctx, state) => ModuleDetailScreen(
+          moduleNumber: int.parse(state.pathParameters['moduleNumber']!),
+        ),
+      ),
+      GoRoute(
+        path: '/learn/flash-recall',
+        builder: (_, __) => const FlashRecallScreen(),
+      ),
+      GoRoute(
+        path: '/learn/spatial-particles',
+        builder: (_, __) => const SpatialParticlesScreen(),
+      ),
+      GoRoute(
+        path: '/learn/chunking',
+        builder: (_, __) => const ChunkingScreen(),
+      ),
+      GoRoute(
+        path: '/learn/root-discovery',
+        builder: (_, __) => const RootDiscoveryScreen(),
+      ),
+      GoRoute(
+        path: '/learn/verse-scan',
+        builder: (_, __) => const VerseScanScreen(),
+      ),
+
+      // Hifz Master deep routes (full screen)
+      GoRoute(
+        path: '/hifz/new-goal',
+        builder: (_, __) => const HifzGoalCreateScreen(),
+      ),
+      GoRoute(
+        path: '/hifz/session/:goalId',
+        builder: (ctx, state) => HifzSessionScreen(
+          goalId: state.pathParameters['goalId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/hifz/revision',
+        builder: (_, __) => const HifzRevisionScreen(),
+      ),
+      GoRoute(
+        path: '/hifz/heatmap/:surahNumber',
+        builder: (ctx, state) => SurahHeatmapScreen(
+          surahNumber: int.parse(state.pathParameters['surahNumber']!),
+        ),
       ),
     ],
     errorBuilder: (_, state) => Scaffold(
