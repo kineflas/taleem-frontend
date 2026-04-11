@@ -298,60 +298,57 @@ class _CurriculumItemScreenState extends ConsumerState<CurriculumItemScreen> {
               ),
             ],
 
+            // ── Enriched lesson content (Médine / grammar lessons) ───────
+            if (item.metadata != null) ...[
+              // Explanation sections
+              if (item.metadata!['explanation_sections'] != null) ...[
+                const SizedBox(height: 20),
+                _EnrichedSectionHeader(icon: Icons.lightbulb_outline, label: 'Explication'),
+                ...(item.metadata!['explanation_sections'] as List<dynamic>).map((s) =>
+                  _EnrichedExplanationCard(section: Map<String, dynamic>.from(s))
+                ),
+              ],
+
+              // Worked examples
+              if (item.metadata!['examples'] != null) ...[
+                const SizedBox(height: 20),
+                _EnrichedSectionHeader(icon: Icons.format_quote, label: 'Exemples'),
+                ...(item.metadata!['examples'] as List<dynamic>).map((e) =>
+                  _EnrichedExampleCard(example: Map<String, dynamic>.from(e))
+                ),
+              ],
+
+              // Vocabulary list
+              if (item.metadata!['vocab'] != null &&
+                  (item.metadata!['vocab'] as List<dynamic>).isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _EnrichedSectionHeader(icon: Icons.menu_book, label: 'Vocabulaire'),
+                _EnrichedVocabList(vocab: List<dynamic>.from(item.metadata!['vocab'])),
+              ],
+
+              // Illustrations / tables
+              if (item.metadata!['illustrations'] != null &&
+                  (item.metadata!['illustrations'] as List<dynamic>).isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _EnrichedSectionHeader(icon: Icons.table_chart_outlined, label: 'Tableaux'),
+                ...(item.metadata!['illustrations'] as List<dynamic>).map((ill) =>
+                  _EnrichedIllustration(illustration: Map<String, dynamic>.from(ill))
+                ),
+              ],
+
+              // Interactive quiz
+              if (item.metadata!['quiz'] != null &&
+                  (item.metadata!['quiz'] as List<dynamic>).isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _EnrichedSectionHeader(icon: Icons.quiz_outlined, label: 'Quiz'),
+                _EnrichedQuizSection(questions: List<dynamic>.from(item.metadata!['quiz'])),
+              ],
+            ],
+
             // ── Metadata pills (for Tajwid — letters concerned) ──────────
             if (item.metadata != null && item.metadata!['letters'] != null) ...[
               const SizedBox(height: 16),
               _LetterPills(letters: List<String>.from(item.metadata!['letters'])),
-            ],
-
-            // ── Enriched: Explanation sections ──────────────────────────────
-            if (item.metadata != null && item.metadata!['explanation_sections'] != null)
-              ...List<dynamic>.from(item.metadata!['explanation_sections']).map((section) =>
-                _EnrichedExplanationCard(section: Map<String, dynamic>.from(section)),
-              ),
-
-            // ── Enriched: Worked examples ───────────────────────────────────
-            if (item.metadata != null && item.metadata!['examples'] != null) ...[
-              const SizedBox(height: 16),
-              _EnrichedSectionHeader(title: 'Exemples', icon: Icons.format_quote),
-              ...List<dynamic>.from(item.metadata!['examples']).map((ex) =>
-                _EnrichedExampleCard(example: Map<String, dynamic>.from(ex)),
-              ),
-            ],
-
-            // ── Enriched: Illustrations (tables, diagrams) ──────────────────
-            if (item.metadata != null && item.metadata!['illustrations'] != null)
-              ...List<dynamic>.from(item.metadata!['illustrations']).map((ill) =>
-                _EnrichedIllustration(illustration: Map<String, dynamic>.from(ill)),
-              ),
-
-            // ── Enriched: Quiz questions ────────────────────────────────────
-            if (item.metadata != null && item.metadata!['quiz'] != null) ...[
-              const SizedBox(height: 16),
-              _EnrichedSectionHeader(title: 'Quiz', icon: Icons.quiz),
-              _EnrichedQuizSection(
-                questions: List<dynamic>.from(item.metadata!['quiz'])
-                    .map((q) => Map<String, dynamic>.from(q))
-                    .toList(),
-              ),
-            ],
-
-            // ── Enriched: Gamification challenges ───────────────────────────
-            if (item.metadata != null && item.metadata!['challenges'] != null) ...[
-              const SizedBox(height: 16),
-              _EnrichedSectionHeader(title: 'Défis', icon: Icons.emoji_events),
-              ...List<dynamic>.from(item.metadata!['challenges']).map((ch) =>
-                _EnrichedChallengeCard(challenge: Map<String, dynamic>.from(ch)),
-              ),
-            ],
-
-            // ── Enriched: Vocabulary list ───────────────────────────────────
-            if (item.metadata != null && item.metadata!['vocab'] != null) ...[
-              const SizedBox(height: 16),
-              _EnrichedSectionHeader(title: 'Vocabulaire', icon: Icons.translate),
-              _EnrichedVocabList(
-                vocab: List<dynamic>.from(item.metadata!['vocab']),
-              ),
             ],
 
             // ── Surah reference (Hifz) ────────────────────────────────────
@@ -624,606 +621,6 @@ class _MasterySelector extends StatelessWidget {
   }
 }
 
-// ── Enriched Content Widgets ──────────────────────────────────────────────
-
-class _EnrichedSectionHeader extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  const _EnrichedSectionHeader({required this.title, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.primary, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EnrichedExplanationCard extends StatelessWidget {
-  final Map<String, dynamic> section;
-  const _EnrichedExplanationCard({required this.section});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.accent.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (section['title_fr'] != null)
-            Text(
-              section['title_fr'],
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-              ),
-            ),
-          if (section['content_ar'] != null) ...[
-            const SizedBox(height: 10),
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  section['content_ar'],
-                  style: TextStyle(
-                    fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
-                    fontSize: 20,
-                    height: 1.8,
-                  ),
-                ),
-              ),
-            ),
-          ],
-          if (section['content_fr'] != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              section['content_fr'],
-              style: const TextStyle(fontSize: 14, height: 1.6),
-            ),
-          ],
-          if (section['audio_hint'] != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.hearing, size: 16, color: Colors.blue),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      section['audio_hint'],
-                      style: const TextStyle(fontSize: 13, color: Colors.blue),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (section['tip_fr'] != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('💡', style: TextStyle(fontSize: 14)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      section['tip_fr'],
-                      style: TextStyle(fontSize: 13, color: AppColors.success),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (section['common_mistakes_fr'] != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.danger.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('⚠️', style: TextStyle(fontSize: 14)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      section['common_mistakes_fr'],
-                      style: TextStyle(fontSize: 13, color: AppColors.danger),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EnrichedExampleCard extends StatelessWidget {
-  final Map<String, dynamic> example;
-  const _EnrichedExampleCard({required this.example});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(left: BorderSide(color: AppColors.accent, width: 3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (example['arabic'] != null)
-            Directionality(
-              textDirection: TextDirection.rtl,
-              child: Text(
-                example['arabic'],
-                style: TextStyle(
-                  fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
-                  fontSize: 22,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-          if (example['transliteration'] != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              '[${example['transliteration']}]',
-              style: TextStyle(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: AppColors.accent,
-              ),
-            ),
-          ],
-          if (example['translation_fr'] != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              example['translation_fr'],
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-          ],
-          if (example['explanation_fr'] != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              example['explanation_fr'],
-              style: TextStyle(fontSize: 13, color: Colors.grey[700], height: 1.5),
-            ),
-          ],
-          if (example['breakdown_fr'] != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              example['breakdown_fr'],
-              style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.4),
-            ),
-          ],
-          if (example['grammatical_note_fr'] != null) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.school, size: 14, color: AppColors.primary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      example['grammatical_note_fr'],
-                      style: const TextStyle(fontSize: 12, color: AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EnrichedIllustration extends StatelessWidget {
-  final Map<String, dynamic> illustration;
-  const _EnrichedIllustration({required this.illustration});
-
-  @override
-  Widget build(BuildContext context) {
-    final type = illustration['type'] as String? ?? '';
-    final title = illustration['title_fr'] as String? ?? '';
-    final desc = illustration['description_fr'] as String?;
-    final data = illustration['data'];
-
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                type.contains('table') ? Icons.table_chart :
-                type.contains('chart') ? Icons.bar_chart :
-                Icons.image,
-                color: AppColors.primary,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-          if (desc != null) ...[
-            const SizedBox(height: 6),
-            Text(desc, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
-          ],
-          if (data is Map && data['headers'] != null && data['rows'] != null) ...[
-            const SizedBox(height: 10),
-            _buildTable(data),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTable(dynamic data) {
-    final headers = List<String>.from(data['headers']);
-    final rows = List<dynamic>.from(data['rows']);
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        headingRowColor: WidgetStateProperty.all(AppColors.primary.withOpacity(0.08)),
-        columnSpacing: 16,
-        columns: headers.map((h) => DataColumn(
-          label: Text(h, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-        )).toList(),
-        rows: rows.map((row) {
-          final cells = List<dynamic>.from(row is List ? row : [row]);
-          return DataRow(
-            cells: cells.map((c) => DataCell(
-              Text(c.toString(), style: const TextStyle(fontSize: 12)),
-            )).toList(),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _EnrichedQuizSection extends StatefulWidget {
-  final List<Map<String, dynamic>> questions;
-  const _EnrichedQuizSection({required this.questions});
-
-  @override
-  State<_EnrichedQuizSection> createState() => _EnrichedQuizSectionState();
-}
-
-class _EnrichedQuizSectionState extends State<_EnrichedQuizSection> {
-  final Map<int, int?> _selectedAnswers = {};
-  final Map<int, bool> _revealed = {};
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: widget.questions.asMap().entries.map((entry) {
-        final idx = entry.key;
-        final q = entry.value;
-        final question = q['question_fr'] as String? ?? '';
-        final choices = List<String>.from(q['choices'] ?? []);
-        final correctIndex = q['correct_index'] as int? ?? 0;
-        final explanation = q['explanation_fr'] as String?;
-        final isRevealed = _revealed[idx] == true;
-        final selectedAnswer = _selectedAnswers[idx];
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isRevealed
-                  ? (selectedAnswer == correctIndex ? AppColors.success : AppColors.danger)
-                  : Colors.grey[200]!,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Q${idx + 1}. $question',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-              const SizedBox(height: 10),
-              ...choices.asMap().entries.map((choiceEntry) {
-                final cIdx = choiceEntry.key;
-                final choice = choiceEntry.value;
-                final isSelected = selectedAnswer == cIdx;
-                final isCorrect = cIdx == correctIndex;
-
-                Color bgColor = Colors.grey[50]!;
-                Color borderColor = Colors.grey[300]!;
-                if (isRevealed) {
-                  if (isCorrect) {
-                    bgColor = AppColors.success.withOpacity(0.1);
-                    borderColor = AppColors.success;
-                  } else if (isSelected && !isCorrect) {
-                    bgColor = AppColors.danger.withOpacity(0.1);
-                    borderColor = AppColors.danger;
-                  }
-                } else if (isSelected) {
-                  bgColor = AppColors.primary.withOpacity(0.08);
-                  borderColor = AppColors.primary;
-                }
-
-                return GestureDetector(
-                  onTap: isRevealed ? null : () {
-                    setState(() {
-                      _selectedAnswers[idx] = cIdx;
-                      _revealed[idx] = true;
-                    });
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: borderColor),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(choice, style: const TextStyle(fontSize: 13))),
-                        if (isRevealed && isCorrect)
-                          const Icon(Icons.check_circle, color: AppColors.success, size: 18),
-                        if (isRevealed && isSelected && !isCorrect)
-                          const Icon(Icons.cancel, color: AppColors.danger, size: 18),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-              if (isRevealed && explanation != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.info_outline, size: 16, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          explanation,
-                          style: const TextStyle(fontSize: 12, color: AppColors.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _EnrichedChallengeCard extends StatelessWidget {
-  final Map<String, dynamic> challenge;
-  const _EnrichedChallengeCard({required this.challenge});
-
-  @override
-  Widget build(BuildContext context) {
-    final type = challenge['type'] as String? ?? '';
-    final title = challenge['title_fr'] as String? ?? '';
-    final desc = challenge['description_fr'] as String? ?? '';
-
-    IconData icon;
-    Color color;
-    switch (type) {
-      case 'speed_reading':
-        icon = Icons.speed;
-        color = Colors.orange;
-        break;
-      case 'memory_pairs':
-        icon = Icons.grid_view;
-        color = Colors.purple;
-        break;
-      case 'build_syllable':
-        icon = Icons.construction;
-        color = Colors.teal;
-        break;
-      case 'dictation':
-        icon = Icons.hearing;
-        color = Colors.blue;
-        break;
-      default:
-        icon = Icons.emoji_events;
-        color = AppColors.accent;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: color),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  desc,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.play_circle_outline, color: color, size: 28),
-        ],
-      ),
-    );
-  }
-}
-
-class _EnrichedVocabList extends StatelessWidget {
-  final List<dynamic> vocab;
-  const _EnrichedVocabList({required this.vocab});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        children: vocab.map((v) {
-          final items = v is List ? v : [v.toString()];
-          final arabic = items.isNotEmpty ? items[0].toString() : '';
-          final meaning = items.length > 1 ? items[1].toString() : '';
-          final translit = items.length > 2 ? items[2].toString() : '';
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Directionality(
-                    textDirection: TextDirection.rtl,
-                    child: Text(
-                      arabic,
-                      style: TextStyle(
-                        fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
-                        fontSize: 18,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                ),
-                if (translit.isNotEmpty)
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      translit,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.accent,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    meaning,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
 // ── Submission Bottom Sheet ────────────────────────────────────────────────
 
 class _SubmissionSheet extends ConsumerStatefulWidget {
@@ -1371,6 +768,514 @@ class _SubmissionSheetState extends ConsumerState<_SubmissionSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Enriched lesson content widgets (Médine & grammar lessons)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _EnrichedSectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _EnrichedSectionHeader({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.primary, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EnrichedExplanationCard extends StatelessWidget {
+  final Map<String, dynamic> section;
+  const _EnrichedExplanationCard({required this.section});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (section['title_ar'] != null && (section['title_ar'] as String).isNotEmpty) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                section['title_ar'],
+                style: TextStyle(
+                  fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                  fontSize: 18,
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+                textDirection: TextDirection.rtl,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Text(
+            section['title_fr'] ?? '',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            section['content_fr'] ?? '',
+            style: const TextStyle(fontSize: 14, height: 1.6),
+          ),
+          if (section['content_ar'] != null && (section['content_ar'] as String).isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(right: BorderSide(color: AppColors.primary, width: 3)),
+              ),
+              child: Text(
+                section['content_ar'],
+                style: TextStyle(
+                  fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                  fontSize: 18,
+                  height: 1.8,
+                ),
+                textDirection: TextDirection.rtl,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
+          if (section['tip_fr'] != null && (section['tip_fr'] as String).isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.tips_and_updates, color: AppColors.accent, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      section['tip_fr'],
+                      style: TextStyle(
+                        fontSize: 13, color: AppColors.accent, fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EnrichedExampleCard extends StatelessWidget {
+  final Map<String, dynamic> example;
+  const _EnrichedExampleCard({required this.example});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            example['arabic'] ?? '',
+            style: TextStyle(
+              fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+              fontSize: 26,
+              height: 1.8,
+              color: AppColors.primary,
+              fontWeight: FontWeight.bold,
+            ),
+            textDirection: TextDirection.rtl,
+            textAlign: TextAlign.center,
+          ),
+          if (example['transliteration'] != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '[${example['transliteration']}]',
+              style: TextStyle(fontSize: 13, color: AppColors.accent, fontStyle: FontStyle.italic),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (example['translation_fr'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              example['translation_fr'],
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (example['breakdown_fr'] != null) ...[
+            const Divider(height: 16),
+            Text(
+              example['breakdown_fr'],
+              style: TextStyle(fontSize: 12, color: Colors.grey[700], height: 1.5),
+            ),
+          ],
+          if (example['grammatical_note_fr'] != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '📌 ${example['grammatical_note_fr']}',
+              style: TextStyle(fontSize: 12, color: AppColors.accent, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EnrichedVocabList extends StatelessWidget {
+  final List<dynamic> vocab;
+  const _EnrichedVocabList({required this.vocab});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        children: vocab.asMap().entries.map((entry) {
+          final i = entry.key;
+          final v = entry.value is Map
+              ? Map<String, dynamic>.from(entry.value)
+              : <String, dynamic>{};
+          final isLast = i == vocab.length - 1;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey[100]!)),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  v['arabic'] ?? '',
+                  style: TextStyle(
+                    fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                    fontSize: 22,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+                const SizedBox(width: 12),
+                Text('·', style: TextStyle(color: Colors.grey[400], fontSize: 18)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        v['translation_fr'] ?? '',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                      if (v['transliteration'] != null)
+                        Text(
+                          v['transliteration'],
+                          style: TextStyle(
+                            fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _EnrichedIllustration extends StatelessWidget {
+  final Map<String, dynamic> illustration;
+  const _EnrichedIllustration({required this.illustration});
+
+  @override
+  Widget build(BuildContext context) {
+    final type = illustration['type'] ?? '';
+    final data = illustration['data'] as Map<String, dynamic>? ?? {};
+    final title = illustration['title_fr'] ?? '';
+
+    if (type == 'table') {
+      final headers = List<String>.from(data['headers'] ?? []);
+      final rows = (data['rows'] as List<dynamic>?)
+          ?.map((r) => List<String>.from(r))
+          .toList() ?? [];
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (title.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.07),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                ),
+                child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStateProperty.all(AppColors.primary.withOpacity(0.05)),
+                columns: headers.map((h) => DataColumn(
+                  label: Text(h, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                )).toList(),
+                rows: rows.map((row) => DataRow(
+                  cells: row.map((cell) {
+                    final isArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(cell);
+                    return DataCell(Text(
+                      cell,
+                      style: TextStyle(
+                        fontFamily: isArabic ? GoogleFonts.scheherazadeNew().fontFamily : null,
+                        fontSize: isArabic ? 18 : 13,
+                      ),
+                      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                    ));
+                  }).toList(),
+                )).toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Text(title, style: const TextStyle(fontSize: 14)),
+    );
+  }
+}
+
+class _EnrichedQuizSection extends StatefulWidget {
+  final List<dynamic> questions;
+  const _EnrichedQuizSection({required this.questions});
+
+  @override
+  State<_EnrichedQuizSection> createState() => _EnrichedQuizSectionState();
+}
+
+class _EnrichedQuizSectionState extends State<_EnrichedQuizSection> {
+  final Map<int, int?> _selected = {};
+  final Map<int, bool> _revealed = {};
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: widget.questions.asMap().entries.map((entry) {
+        final idx = entry.key;
+        final q = Map<String, dynamic>.from(entry.value);
+        final choices = List<String>.from(q['choices'] ?? []);
+        final correct = q['correct_index'] as int? ?? 0;
+        final selected = _selected[idx];
+        final revealed = _revealed[idx] ?? false;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '${idx + 1}',
+                      style: const TextStyle(
+                        color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      q['question_fr'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600, height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...choices.asMap().entries.map((choiceEntry) {
+                final ci = choiceEntry.key;
+                final choice = choiceEntry.value;
+                Color bgColor = Colors.grey[100]!;
+                Color borderColor = Colors.grey[300]!;
+                Color textColor = AppColors.textPrimary;
+
+                if (revealed) {
+                  if (ci == correct) {
+                    bgColor = AppColors.success.withOpacity(0.1);
+                    borderColor = AppColors.success;
+                    textColor = AppColors.success;
+                  } else if (ci == selected && ci != correct) {
+                    bgColor = AppColors.danger.withOpacity(0.1);
+                    borderColor = AppColors.danger;
+                    textColor = AppColors.danger;
+                  }
+                } else if (selected == ci) {
+                  bgColor = AppColors.primary.withOpacity(0.1);
+                  borderColor = AppColors.primary;
+                  textColor = AppColors.primary;
+                }
+
+                final isArabic = RegExp(r'[\u0600-\u06FF]').hasMatch(choice);
+                return GestureDetector(
+                  onTap: revealed ? null : () => setState(() => _selected[idx] = ci),
+                  child: Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            choice,
+                            style: TextStyle(
+                              fontSize: isArabic ? 18 : 14,
+                              color: textColor,
+                              fontFamily: isArabic ? GoogleFonts.scheherazadeNew().fontFamily : null,
+                            ),
+                            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+                          ),
+                        ),
+                        if (revealed && ci == correct)
+                          Icon(Icons.check_circle, color: AppColors.success, size: 18),
+                        if (revealed && ci == selected && ci != correct)
+                          Icon(Icons.cancel, color: AppColors.danger, size: 18),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              if (selected != null && !revealed)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () => setState(() => _revealed[idx] = true),
+                    child: const Text('Vérifier', style: TextStyle(color: Colors.white)),
+                  ),
+                ),
+              if (revealed && q['explanation_fr'] != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline, color: AppColors.accent, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          q['explanation_fr'],
+                          style: TextStyle(
+                            fontSize: 13, color: AppColors.accent, height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
