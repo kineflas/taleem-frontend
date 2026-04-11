@@ -6,6 +6,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
+import '../models/hifz_score_model.dart';
 import '../providers/hifz_provider.dart';
 import '../providers/quran_provider.dart';
 
@@ -17,16 +18,9 @@ import '../providers/quran_provider.dart';
 //      sourates pour forcer la discrimination (Rohrer & Taylor, 2007 : +43-76%)
 //   2. Évaluation 3 niveaux (🟢 J+7 / 🟡 J+3 / 🔴 J+1) au lieu du binaire
 //   3. Versets 🔴 remontent en priorité dans la session
+//
+// ReviewScore et reviewIntervals sont importés depuis ../models/hifz_score_model.dart
 // ─────────────────────────────────────────────────────────────────────────────
-
-enum ReviewScore { green, orange, red }
-
-// Intervals adaptatifs selon le score
-const _reviewIntervals = {
-  ReviewScore.green:  7,
-  ReviewScore.orange: 3,
-  ReviewScore.red:    1,
-};
 
 class HifzRevisionScreen extends ConsumerStatefulWidget {
   const HifzRevisionScreen({super.key});
@@ -528,7 +522,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
       ),
     }[score]!;
 
-    final nextDate = DateTime.now().add(Duration(days: _reviewIntervals[score]!));
+    final nextDate = DateTime.now().add(Duration(days: reviewIntervals[score]!));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -753,7 +747,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     // ref.read(learningApiProvider).recordVerseReview(
     //   verseId: verse.id,
     //   score: score.name.toUpperCase(),
-    //   nextReviewDays: _reviewIntervals[score]!,
+    //   nextReviewDays: reviewIntervals[score]!,
     // );
   }
 }

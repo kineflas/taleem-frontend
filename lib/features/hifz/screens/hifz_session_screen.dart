@@ -6,6 +6,7 @@ import 'dart:async';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
+import '../models/hifz_score_model.dart';
 import '../providers/hifz_provider.dart';
 import '../providers/quran_provider.dart';
 
@@ -24,7 +25,7 @@ const _phaseTypeFr    = ['Lecture', 'Récitation', 'Lecture', 'Récitation'];
 
 enum SessionMode { tikrar, libre }
 
-enum ReviewScore { green, orange, red }
+// ReviewScore est importé depuis ../models/hifz_score_model.dart
 
 class HifzSessionScreen extends ConsumerStatefulWidget {
   final HifzGoalModel goal;
