@@ -7,15 +7,88 @@ import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
 import '../providers/hifz_provider.dart';
 import '../../shared/widgets/streak_badge.dart';
+import '../widgets/hifz_tour.dart';
 import 'hifz_goal_create_screen.dart';
 import 'hifz_session_screen.dart';
 import 'hifz_revision_screen.dart';
 
-class HifzHubScreen extends ConsumerWidget {
+class HifzHubScreen extends ConsumerStatefulWidget {
   const HifzHubScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HifzHubScreen> createState() => _HifzHubScreenState();
+}
+
+class _HifzHubScreenState extends ConsumerState<HifzHubScreen> {
+  // ── Tour GlobalKeys ─────────────────────────────────────────────────────────
+  final _headerKey    = GlobalKey();
+  final _focusKey     = GlobalKey();
+  final _goalsKey     = GlobalKey();
+  final _badgesKey    = GlobalKey();
+  final _fabKey       = GlobalKey();
+
+  late final SpotlightTour _tour;
+
+  @override
+  void initState() {
+    super.initState();
+    _tour = SpotlightTour(
+      steps: [
+        TourStep(
+          targetKey: _headerKey,
+          emoji: '⚡',
+          title: 'Niveau & XP',
+          description:
+              'Votre niveau et vos points d\'expérience s\'affichent ici. Chaque verset mémorisé vous rapporte de l\'XP et fait monter votre rang.',
+          position: TooltipPosition.bottom,
+        ),
+        TourStep(
+          targetKey: _focusKey,
+          emoji: '🎯',
+          title: 'Tâche Prioritaire',
+          description:
+              'Cette carte indique votre mission du moment : révisions en attente (orange) ou nouvelle session de mémorisation (bleu). Appuyez pour commencer !',
+          position: TooltipPosition.bottom,
+        ),
+        TourStep(
+          targetKey: _goalsKey,
+          emoji: '📖',
+          title: 'Mes Objectifs',
+          description:
+              'Chaque objectif correspond à une sourate. Suivez votre progression et reprenez là où vous vous êtes arrêté(e).',
+          position: TooltipPosition.bottom,
+        ),
+        TourStep(
+          targetKey: _badgesKey,
+          emoji: '🏆',
+          title: 'Mes Badges',
+          description:
+              'Les badges récompensent vos accomplissements : séries de jours consécutifs, sourates complètes, premier juz...',
+          position: TooltipPosition.top,
+        ),
+        TourStep(
+          targetKey: _fabKey,
+          emoji: '➕',
+          title: 'Nouvel Objectif',
+          description:
+              'Appuyez ici pour choisir une nouvelle sourate à mémoriser et définir votre rythme quotidien.',
+          position: TooltipPosition.top,
+        ),
+      ],
+      onComplete: () => TourPrefs.markHubTourDone(),
+    );
+
+    // Déclencher le tour après le premier rendu si c'est la première visite
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final done = await TourPrefs.isHubTourDone();
+      if (!done && mounted) {
+        _tour.start(context);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final goalsAsync = ref.watch(hifzGoalsProvider);
     final xpAsync = ref.watch(hifzStudentXPProvider);
     final dueVersesAsync = ref.watch(hifzDueVersesProvider);
@@ -75,25 +148,29 @@ class HifzHubScreen extends ConsumerWidget {
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 32)),
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const HifzGoalCreateScreen()),
-          );
-        },
-        tooltip: 'Ajouter un objectif',
-        child: const Icon(Icons.add),
+      floatingActionButton: SizedBox(
+        key: _fabKey,
+        child: FloatingActionButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HifzGoalCreateScreen()),
+            );
+          },
+          tooltip: 'Ajouter un objectif',
+          child: const Icon(Icons.add),
+        ),
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context, AsyncValue<StudentXPModel> xpAsync) {
     return Container(
+      key: _headerKey,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
       color: AppColors.primary,
       child: Column(
@@ -192,6 +269,7 @@ class HifzHubScreen extends ConsumerWidget {
     // Cas 1 : des révisions sont dues → priorité absolue
     if (dueCount > 0) {
       return Container(
+        key: _focusKey,   // only one branch renders at a time — no duplicate key
         margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
@@ -264,6 +342,7 @@ class HifzHubScreen extends ConsumerWidget {
     }
 
     // Cas 2 : pas de révisions → montrer l'objectif en cours le plus avancé
+    // _focusKey is attached to the cas-1 container above; for cas-2 we reuse the same key via a wrapper
     final activeGoal = goals
         .where((g) => !g.isCompleted)
         .fold<HifzGoalModel?>(null, (prev, g) {
@@ -277,6 +356,7 @@ class HifzHubScreen extends ConsumerWidget {
     final surahName = surahNames[activeGoal.surahNumber - 1]['ar']!;
 
     return Container(
+      key: _focusKey,
       margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -370,6 +450,7 @@ class HifzHubScreen extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
+          key: _goalsKey,
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
           child: Text(
             'Mes objectifs',
@@ -585,6 +666,7 @@ class HifzHubScreen extends ConsumerWidget {
     }
 
     return Column(
+      key: _badgesKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(

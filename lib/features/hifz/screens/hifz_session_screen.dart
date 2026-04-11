@@ -11,6 +11,7 @@ import '../../autonomous_learning/models/learning_models.dart';
 import '../models/hifz_score_model.dart';
 import '../providers/hifz_provider.dart';
 import '../providers/quran_provider.dart';
+import '../widgets/hifz_tour.dart';
 import 'hifz_revision_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +74,15 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
   // ── Safe Fail (long press révèle temporairement le texte masqué) ─────────
   bool  _safeFailActive = false;
   Timer? _safeFailTimer;
+
+  // ── Tour In-Session ────────────────────────────────────────────────────────
+  final _phaseIndicatorKey = GlobalKey();
+  final _verseAreaKey      = GlobalKey();
+  final _speedControlKey   = GlobalKey();
+  final _translateAreaKey  = GlobalKey();
+  final _safeFailLabelKey  = GlobalKey();
+  final _waqfAreaKey       = GlobalKey();
+  late final SpotlightTour _sessionTour;
 
   // ── Animation ─────────────────────────────────────────────────────────────
   late AnimationController _phaseAnim;
@@ -264,9 +274,71 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
       duration: const Duration(milliseconds: 400),
     );
 
+    // Initialiser le tour In-Session (6 étapes)
+    _sessionTour = SpotlightTour(
+      steps: [
+        TourStep(
+          targetKey: _phaseIndicatorKey,
+          emoji: '🔄',
+          title: 'Protocole TIKRAR 6446',
+          description:
+              'Chaque verset est répété selon 4 phases : 6× avec texte → 4× de mémoire → 4× avec texte → 6× de mémoire. Les pastilles indiquent votre progression dans la phase actuelle.',
+          position: TooltipPosition.bottom,
+        ),
+        TourStep(
+          targetKey: _verseAreaKey,
+          emoji: '👁️',
+          title: 'Masquage Progressif',
+          description:
+              'En phase de récitation, le texte est automatiquement masqué pour entraîner votre mémoire. Le niveau de masquage s\'affiche sous le verset.',
+          position: TooltipPosition.bottom,
+        ),
+        TourStep(
+          targetKey: _speedControlKey,
+          emoji: '⏱️',
+          title: 'Vitesse de Lecture',
+          description:
+              'Choisissez 0.75× pour débutant, 1× normal, ou 1.25× pour les avancés. La vitesse s\'applique immédiatement sans interrompre la lecture.',
+          position: TooltipPosition.top,
+        ),
+        TourStep(
+          targetKey: _translateAreaKey,
+          emoji: '🌐',
+          title: 'Traduction Instantanée',
+          description:
+              'Appuyez sur l\'icône 🌐 dans la barre du haut pour afficher ou masquer la traduction française du verset. Idéal pour comprendre le sens.',
+          position: TooltipPosition.bottom,
+        ),
+        TourStep(
+          targetKey: _safeFailLabelKey,
+          emoji: '🆘',
+          title: 'Safe Fail — Aide d\'urgence',
+          description:
+              'Si vous bloquez, maintenez appuyé sur le texte masqué pendant 1 seconde : le texte se révèle temporairement pendant 2 secondes. Votre progression n\'est pas pénalisée.',
+          position: TooltipPosition.top,
+        ),
+        TourStep(
+          targetKey: _waqfAreaKey,
+          emoji: '⚖️',
+          title: 'Évaluation WAQF',
+          description:
+              'Après les 20 répétitions (6+4+4+6), évaluez honnêtement votre récitation : ✅ Excellent (7j), ⚠️ Bien (3j), 🔄 À retravailler (demain). Ceci définit quand réviser ce verset.',
+          position: TooltipPosition.top,
+        ),
+      ],
+      onComplete: () => TourPrefs.markSessionTourDone(),
+    );
+
     // Pré-charger les 5 premiers versets dès l'ouverture de la session
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _prefetchAudio(_currentVerse, count: 5);
+      // Déclencher le tour à la première session
+      final done = await TourPrefs.isSessionTourDone();
+      if (!done && mounted) {
+        // Délai léger pour laisser le rendu Scaffold se stabiliser
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (mounted) _sessionTour.start(context);
+      }
     });
 
     _audioPlayer.onPlayerComplete.listen((_) {
@@ -435,6 +507,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
 
             // ── Texte du verset ──────────────────────────────────────────
             Container(
+              key: _verseAreaKey,
               color: Colors.white,
               padding: const EdgeInsets.all(24),
               margin: const EdgeInsets.all(16),
@@ -482,8 +555,9 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
                       ),
                     ),
                   const SizedBox(height: 12),
-                  // Label masquage courant
+                  // Label masquage courant — also anchors the Safe Fail tour step
                   Row(
+                    key: _safeFailLabelKey,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text('مستوى الإخفاء: ',
@@ -503,8 +577,13 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
             ),
 
             // ── Panneau traduction (Smart Toggle) ────────────────────────
-            if (_showTranslation)
-              _buildTranslationPanel(translationAsync),
+            // _translateAreaKey is always in tree (even when panel is hidden)
+            SizedBox(
+              key: _translateAreaKey,
+              child: _showTranslation
+                  ? _buildTranslationPanel(translationAsync)
+                  : const SizedBox.shrink(),
+            ),
 
             // ── Indicateur TIKRAR ou compteur Libre ──────────────────────
             if (_sessionMode == SessionMode.tikrar)
@@ -595,6 +674,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
     final groupColor = isRecall ? AppColors.accent : AppColors.primary;
 
     return Container(
+      key: _phaseIndicatorKey,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -761,6 +841,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
   /// Évaluation WAQF après TIKRAR complet
   Widget _buildWaqfEvaluation() {
     return Container(
+      key: _waqfAreaKey,
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1007,6 +1088,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
 
   Widget _buildSpeedControl() {
     return Row(
+      key: _speedControlKey,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Icon(Icons.speed, size: 14, color: AppColors.textSecondary),
