@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart' hide TextDirection;
+import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
 import '../providers/hifz_provider.dart';
+import '../providers/quran_provider.dart';
 
 class HifzRevisionScreen extends ConsumerStatefulWidget {
   const HifzRevisionScreen({super.key});
@@ -140,7 +141,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
                   itemCount: dueVerses.length,
                   itemBuilder: (context, index) {
                     final verse = dueVerses[index];
-                    return _buildVerseCard(context, verse);
+                    return _buildVerseCard(context, ref, verse);
                   },
                 ),
               ),
@@ -151,7 +152,12 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     );
   }
 
-  Widget _buildVerseCard(BuildContext context, VerseProgressModel verse) {
+  Widget _buildVerseCard(BuildContext context, WidgetRef ref, VerseProgressModel verse) {
+    // Fetch verse text from alquran.cloud (cached per surah by Riverpod)
+    final verseAsync = ref.watch(
+      quranVerseProvider((surah: verse.surahNumber, verse: verse.verseNumber)),
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -226,7 +232,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Verse text (placeholder)
+          // Verse text — loaded from alquran.cloud
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -236,15 +242,26 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
             ),
             child: Column(
               children: [
-                Text(
-                  'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.amiri(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                verseAsync.when(
+                  loading: () => const SizedBox(
+                    height: 48,
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
-                  textDirection: TextDirection.rtl,
+                  error: (_, __) => Text(
+                    'Verset non disponible',
+                    style: TextStyle(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                  data: (text) => Text(
+                    text,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.amiri(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                    textDirection: TextDirection.rtl,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Container(
@@ -253,12 +270,12 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
                     color: AppColors.primary.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.volume_up, color: AppColors.primary, size: 18),
-                      const SizedBox(width: 8),
-                      const Text(
+                      Icon(Icons.volume_up, color: AppColors.primary, size: 18),
+                      SizedBox(width: 8),
+                      Text(
                         'Écouter',
                         style: TextStyle(
                           color: AppColors.primary,

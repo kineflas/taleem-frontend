@@ -6,6 +6,7 @@ import 'dart:async';
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
 import '../providers/hifz_provider.dart';
+import '../providers/quran_provider.dart';
 
 class HifzSessionScreen extends ConsumerStatefulWidget {
   final HifzGoalModel goal;
@@ -27,19 +28,10 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   Timer? _pauseTimer;
   Timer? _loopTimer;
 
-  // Mock verse text (in real app, fetch from Quran API)
-  final Map<String, String> _verseTexts = {
-    '1:1': 'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ',
-    '1:2': 'الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
-    '1:3': 'الرَّحْمَٰنِ الرَّحِيمِ',
-    '1:4': 'مَالِكِ يَوْمِ الدِّينِ',
-    '1:5': 'إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ',
-  };
-
   @override
   void initState() {
     super.initState();
-    _currentVerse = widget.goal.totalVerses > 0 ? 1 : 1;
+    _currentVerse = 1;
   }
 
   @override
@@ -51,8 +43,74 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final verseKey = '${widget.goal.surahNumber}:$_currentVerse';
-    final verseText = _verseTexts[verseKey] ?? 'الحمد لله رب العالمين...';
+    final surahAsync = ref.watch(quranSurahProvider(widget.goal.surahNumber));
+
+    return surahAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text('سورة ${widget.goal.surahNumber}'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Chargement des versets…'),
+            ],
+          ),
+        ),
+      ),
+      error: (e, _) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text('سورة ${widget.goal.surahNumber}'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.wifi_off, size: 48, color: AppColors.danger),
+                const SizedBox(height: 16),
+                const Text(
+                  'Impossible de charger les versets',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Vérifiez votre connexion internet',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => ref.invalidate(quranSurahProvider(widget.goal.surahNumber)),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Réessayer'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      data: (verseTexts) => _buildSession(context, verseTexts),
+    );
+  }
+
+  Widget _buildSession(BuildContext context, Map<int, String> verseTexts) {
+    final verseText = verseTexts[_currentVerse] ?? '…';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -122,7 +180,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
                   ),
                   const SizedBox(height: 16),
                   // Verse text with masking
-                  _buildMaskedVerseText(verseText),
+                  _buildMaskedVerseText(_currentVerseText),
                   const SizedBox(height: 16),
                   // Masking level indicator
                   Row(
