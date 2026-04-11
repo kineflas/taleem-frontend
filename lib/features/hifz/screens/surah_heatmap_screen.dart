@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
-import '../../autonomous_learning/providers/learning_provider.dart';
+import '../providers/hifz_provider.dart';
 
 class SurahHeatmapScreen extends ConsumerStatefulWidget {
   final int surahNumber;
@@ -24,7 +24,7 @@ class _SurahHeatmapScreenState extends ConsumerState<SurahHeatmapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final heatmapAsync = ref.watch(surahHeatmapProvider(widget.surahNumber));
+    final heatmapAsync = ref.watch(hifzSurahHeatmapProvider(widget.surahNumber));
 
     return Scaffold(
       backgroundColor: AppColors.background,

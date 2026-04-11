@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// Learning models for Autonomous Learning feature
 /// Includes Word, LearningSession, ModuleProgress, etc.
 
@@ -219,4 +221,288 @@ class ExerciseResult {
         'responseTimeMs': responseTimeMs,
         'answeredAt': answeredAt.toIso8601String(),
       };
+}
+
+// ============ HIFZ MASTER MODELS ============
+
+enum GoalMode {
+  quantitative,
+  temporal;
+
+  factory GoalMode.fromApi(String value) {
+    switch (value.toUpperCase()) {
+      case 'TEMPORAL':
+        return GoalMode.temporal;
+      default:
+        return GoalMode.quantitative;
+    }
+  }
+
+  String get apiValue => name.toUpperCase();
+}
+
+enum VerseMastery {
+  red,
+  orange,
+  green;
+
+  factory VerseMastery.fromApi(String value) {
+    switch (value.toUpperCase()) {
+      case 'ORANGE':
+        return VerseMastery.orange;
+      case 'GREEN':
+        return VerseMastery.green;
+      default:
+        return VerseMastery.red;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case VerseMastery.red:
+        return Colors.red;
+      case VerseMastery.orange:
+        return Colors.orange;
+      case VerseMastery.green:
+        return Colors.green;
+    }
+  }
+}
+
+enum StudentLevel {
+  debutant,
+  apprenti,
+  hafizEnHerbe,
+  hafizConfirme,
+  hafizExpert;
+
+  factory StudentLevel.fromApi(String value) {
+    switch (value.toUpperCase()) {
+      case 'APPRENTI':
+        return StudentLevel.apprenti;
+      case 'HAFIZ_EN_HERBE':
+        return StudentLevel.hafizEnHerbe;
+      case 'HAFIZ_CONFIRME':
+        return StudentLevel.hafizConfirme;
+      case 'HAFIZ_EXPERT':
+        return StudentLevel.hafizExpert;
+      default:
+        return StudentLevel.debutant;
+    }
+  }
+
+  String get titleFr {
+    switch (this) {
+      case StudentLevel.debutant:
+        return 'Débutant';
+      case StudentLevel.apprenti:
+        return 'Apprenti';
+      case StudentLevel.hafizEnHerbe:
+        return 'Hafiz en herbe';
+      case StudentLevel.hafizConfirme:
+        return 'Hafiz confirmé';
+      case StudentLevel.hafizExpert:
+        return 'Hafiz expert';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case StudentLevel.debutant:
+        return Icons.import_contacts;
+      case StudentLevel.apprenti:
+        return Icons.school;
+      case StudentLevel.hafizEnHerbe:
+        return Icons.star_half;
+      case StudentLevel.hafizConfirme:
+        return Icons.grade;
+      case StudentLevel.hafizExpert:
+        return Icons.emoji_events;
+    }
+  }
+}
+
+class HifzGoalModel {
+  final String id;
+  final int surahNumber;
+  final String mode;
+  final int versesPerDay;
+  final String? targetDate;
+  final String reciterFolder;
+  final int totalVerses;
+  final int versesMemorized;
+  final int calculatedDailyTarget;
+  final bool isCompleted;
+
+  const HifzGoalModel({
+    required this.id,
+    required this.surahNumber,
+    required this.mode,
+    required this.versesPerDay,
+    this.targetDate,
+    required this.reciterFolder,
+    required this.totalVerses,
+    required this.versesMemorized,
+    required this.calculatedDailyTarget,
+    required this.isCompleted,
+  });
+
+  factory HifzGoalModel.fromJson(Map<String, dynamic> json) {
+    return HifzGoalModel(
+      id: json['id']?.toString() ?? '',
+      surahNumber: json['surah_number'] ?? 1,
+      mode: json['mode'] ?? 'QUANTITATIVE',
+      versesPerDay: json['verses_per_day'] ?? 5,
+      targetDate: json['target_date'],
+      reciterFolder: json['reciter_folder'] ?? 'Alafasy_128kbps',
+      totalVerses: json['total_verses'] ?? 0,
+      versesMemorized: json['verses_memorized'] ?? 0,
+      calculatedDailyTarget: json['calculated_daily_target'] ?? 5,
+      isCompleted: json['is_completed'] ?? false,
+    );
+  }
+}
+
+class VerseProgressModel {
+  final String id;
+  final int surahNumber;
+  final int verseNumber;
+  final VerseMastery mastery;
+  final int masteryScore;
+  final String nextReviewDate;
+  final int totalListens;
+  final int consecutiveSuccesses;
+  final int reviewCount;
+
+  const VerseProgressModel({
+    required this.id,
+    required this.surahNumber,
+    required this.verseNumber,
+    required this.mastery,
+    required this.masteryScore,
+    required this.nextReviewDate,
+    required this.totalListens,
+    required this.consecutiveSuccesses,
+    required this.reviewCount,
+  });
+
+  factory VerseProgressModel.fromJson(Map<String, dynamic> json) {
+    return VerseProgressModel(
+      id: json['id']?.toString() ?? '',
+      surahNumber: json['surah_number'] ?? 1,
+      verseNumber: json['verse_number'] ?? 1,
+      mastery: VerseMastery.fromApi(json['mastery'] ?? 'RED'),
+      masteryScore: json['mastery_score'] ?? 0,
+      nextReviewDate: json['next_review_date'] ?? DateTime.now().toIso8601String(),
+      totalListens: json['total_listens'] ?? 0,
+      consecutiveSuccesses: json['consecutive_successes'] ?? 0,
+      reviewCount: json['review_count'] ?? 0,
+    );
+  }
+}
+
+class BadgeModel {
+  final String id;
+  final String badgeType;
+  final String earnedAt;
+
+  const BadgeModel({
+    required this.id,
+    required this.badgeType,
+    required this.earnedAt,
+  });
+
+  factory BadgeModel.fromJson(Map<String, dynamic> json) {
+    return BadgeModel(
+      id: json['id']?.toString() ?? '',
+      badgeType: json['badge_type'] ?? '',
+      earnedAt: json['earned_at'] ?? '',
+    );
+  }
+}
+
+class StudentXPModel {
+  final int totalXp;
+  final StudentLevel level;
+  final List<BadgeModel> badges;
+
+  const StudentXPModel({
+    required this.totalXp,
+    required this.level,
+    required this.badges,
+  });
+
+  factory StudentXPModel.fromJson(Map<String, dynamic> json) {
+    return StudentXPModel(
+      totalXp: json['total_xp'] ?? 0,
+      level: StudentLevel.fromApi(json['level'] ?? 'DEBUTANT'),
+      badges: (json['badges'] as List<dynamic>?)
+              ?.map((b) => BadgeModel.fromJson(b))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+class ReciterModel {
+  final String id;
+  final String nameEn;
+  final String nameAr;
+
+  const ReciterModel({
+    required this.id,
+    required this.nameEn,
+    required this.nameAr,
+  });
+
+  factory ReciterModel.fromJson(Map<String, dynamic> json) {
+    return ReciterModel(
+      id: json['id'] ?? '',
+      nameEn: json['name_en'] ?? '',
+      nameAr: json['name_ar'] ?? '',
+    );
+  }
+}
+
+class VerseHeatmapEntry {
+  final int verseNumber;
+  final String mastery;
+  final int masteryScore;
+  final bool needsReview;
+
+  const VerseHeatmapEntry({
+    required this.verseNumber,
+    required this.mastery,
+    required this.masteryScore,
+    required this.needsReview,
+  });
+
+  factory VerseHeatmapEntry.fromJson(Map<String, dynamic> json) {
+    return VerseHeatmapEntry(
+      verseNumber: json['verse_number'] ?? 1,
+      mastery: json['mastery'] ?? 'RED',
+      masteryScore: json['mastery_score'] ?? 0,
+      needsReview: json['needs_review'] ?? false,
+    );
+  }
+}
+
+class SurahHeatmapModel {
+  final int surahNumber;
+  final List<VerseHeatmapEntry> verses;
+
+  const SurahHeatmapModel({
+    required this.surahNumber,
+    required this.verses,
+  });
+
+  factory SurahHeatmapModel.fromJson(Map<String, dynamic> json) {
+    return SurahHeatmapModel(
+      surahNumber: json['surah_number'] ?? 1,
+      verses: (json['verses'] as List<dynamic>?)
+              ?.map((v) => VerseHeatmapEntry.fromJson(v))
+              .toList() ??
+          [],
+    );
+  }
 }

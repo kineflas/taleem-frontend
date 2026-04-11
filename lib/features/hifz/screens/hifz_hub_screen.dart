@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
-import '../../autonomous_learning/providers/learning_provider.dart';
+import '../providers/hifz_provider.dart';
 import '../../shared/widgets/streak_badge.dart';
 import 'hifz_goal_create_screen.dart';
 import 'hifz_session_screen.dart';
@@ -17,8 +17,8 @@ class HifzHubScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final goalsAsync = ref.watch(hifzGoalsProvider);
-    final xpAsync = ref.watch(studentXPProvider);
-    final dueVersesAsync = ref.watch(dueVersesProvider);
+    final xpAsync = ref.watch(hifzStudentXPProvider);
+    final dueVersesAsync = ref.watch(hifzDueVersesProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -26,8 +26,8 @@ class HifzHubScreen extends ConsumerWidget {
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(hifzGoalsProvider);
-            ref.invalidate(studentXPProvider);
-            ref.invalidate(dueVersesProvider);
+            ref.invalidate(hifzStudentXPProvider);
+            ref.invalidate(hifzDueVersesProvider);
           },
           child: CustomScrollView(
             slivers: [

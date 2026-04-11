@@ -136,24 +136,34 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
-        path: '/learn/flash-recall',
-        builder: (_, __) => const FlashRecallScreen(),
+        path: '/learn/flash-recall/:moduleNumber',
+        builder: (ctx, state) => FlashRecallScreen(
+          moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '1'),
+        ),
       ),
       GoRoute(
-        path: '/learn/spatial-particles',
-        builder: (_, __) => const SpatialParticlesScreen(),
+        path: '/learn/spatial-particles/:moduleNumber',
+        builder: (ctx, state) => SpatialParticlesScreen(
+          moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '2'),
+        ),
       ),
       GoRoute(
-        path: '/learn/chunking',
-        builder: (_, __) => const ChunkingScreen(),
+        path: '/learn/chunking/:moduleNumber',
+        builder: (ctx, state) => ChunkingScreen(
+          moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '3'),
+        ),
       ),
       GoRoute(
-        path: '/learn/root-discovery',
-        builder: (_, __) => const RootDiscoveryScreen(),
+        path: '/learn/root-discovery/:moduleNumber',
+        builder: (ctx, state) => RootDiscoveryScreen(
+          moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '4'),
+        ),
       ),
       GoRoute(
-        path: '/learn/verse-scan',
-        builder: (_, __) => const VerseScanScreen(),
+        path: '/learn/verse-scan/:moduleNumber',
+        builder: (ctx, state) => VerseScanScreen(
+          moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '5'),
+        ),
       ),
 
       // Hifz Master deep routes (full screen)
@@ -163,9 +173,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/hifz/session/:goalId',
-        builder: (ctx, state) => HifzSessionScreen(
-          goalId: state.pathParameters['goalId']!,
-        ),
+        builder: (ctx, state) {
+          // HifzSessionScreen is navigated to via Navigator.push with a goal object
+          // This route is a fallback - redirect to hub
+          return const HifzHubScreen();
+        },
       ),
       GoRoute(
         path: '/hifz/revision',
@@ -175,6 +187,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/hifz/heatmap/:surahNumber',
         builder: (ctx, state) => SurahHeatmapScreen(
           surahNumber: int.parse(state.pathParameters['surahNumber']!),
+          surahName: state.uri.queryParameters['name'] ?? 'Surah',
         ),
       ),
     ],

@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
-import '../../autonomous_learning/providers/learning_provider.dart';
+import '../providers/hifz_provider.dart';
 
 class HifzGoalCreateScreen extends ConsumerStatefulWidget {
   const HifzGoalCreateScreen({super.key});
@@ -49,7 +49,7 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final recitersAsync = ref.watch(recitersProvider);
+    final recitersAsync = ref.watch(hifzRecitersProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,

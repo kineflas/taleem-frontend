@@ -58,6 +58,58 @@ class LearningApiService {
       cardIds: [],
     );
   }
+
+  // ============ HIFZ MASTER API ============
+
+  Future<List<HifzGoalModel>> fetchHifzGoals() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return [];
+  }
+
+  Future<HifzGoalModel> fetchHifzGoalDetail(String goalId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return HifzGoalModel(
+      id: goalId,
+      surahNumber: 1,
+      mode: 'QUANTITATIVE',
+      versesPerDay: 5,
+      reciterFolder: 'Alafasy_128kbps',
+      totalVerses: 7,
+      versesMemorized: 0,
+      calculatedDailyTarget: 5,
+      isCompleted: false,
+    );
+  }
+
+  Future<List<VerseProgressModel>> fetchDueVerses() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return [];
+  }
+
+  Future<StudentXPModel> fetchStudentXP() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return const StudentXPModel(
+      totalXp: 0,
+      level: StudentLevel.debutant,
+      badges: [],
+    );
+  }
+
+  Future<SurahHeatmapModel> fetchSurahHeatmap(int surah) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return SurahHeatmapModel(surahNumber: surah, verses: []);
+  }
+
+  Future<List<ReciterModel>> fetchReciters() async {
+    await Future.delayed(const Duration(milliseconds: 200));
+    return [
+      const ReciterModel(id: 'Alafasy_128kbps', nameEn: 'Mishary Alafasy', nameAr: 'مشاري العفاسي'),
+      const ReciterModel(id: 'Husary_128kbps', nameEn: 'Mahmoud Al-Husary', nameAr: 'محمود الحصري'),
+      const ReciterModel(id: 'Abdul_Basit_Murattal_192kbps', nameEn: 'Abdul Basit', nameAr: 'عبد الباسط'),
+      const ReciterModel(id: 'Menshawi_16kbps', nameEn: 'Mohamed Menshawi', nameAr: 'محمد المنشاوي'),
+      const ReciterModel(id: 'Muhammad_Jibreel_128kbps', nameEn: 'Muhammad Jibreel', nameAr: 'محمد جبريل'),
+    ];
+  }
 }
 
 /// Provider: All words for a module

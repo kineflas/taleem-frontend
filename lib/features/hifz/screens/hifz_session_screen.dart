@@ -5,7 +5,7 @@ import 'dart:async';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
-import '../../autonomous_learning/providers/learning_provider.dart';
+import '../providers/hifz_provider.dart';
 
 class HifzSessionScreen extends ConsumerStatefulWidget {
   final HifzGoalModel goal;

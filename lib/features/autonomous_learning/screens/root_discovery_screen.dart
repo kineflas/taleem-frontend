@@ -551,7 +551,7 @@ class _GuessMeaningPhase extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        meaning,
+                        meaning ?? '',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -565,7 +565,7 @@ class _GuessMeaningPhase extends StatelessWidget {
                     ),
                     if (revealed)
                       Icon(
-                        isCorrect ? Icons.check_circle : Icons.close_circle,
+                        isCorrect ? Icons.check_circle : Icons.cancel,
                         color: isCorrect ? AppColors.success : AppColors.danger,
                         size: 24,
                       ),

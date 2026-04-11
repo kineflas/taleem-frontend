@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
-import '../../autonomous_learning/providers/learning_provider.dart';
+import '../providers/hifz_provider.dart';
 
 class HifzRevisionScreen extends ConsumerStatefulWidget {
   const HifzRevisionScreen({super.key});
@@ -26,7 +26,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dueVersesAsync = ref.watch(dueVersesProvider);
+    final dueVersesAsync = ref.watch(hifzDueVersesProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,

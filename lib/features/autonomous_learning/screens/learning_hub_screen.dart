@@ -34,7 +34,7 @@ class LearningHubScreen extends ConsumerWidget {
           final avgMastery = moduleProgress.isEmpty
               ? 0
               : moduleProgress.values
-                      .fold<int>(0, (sum, m) => sum + (m['masteryLevel'] ?? 0)) ~/
+                      .fold<int>(0, (sum, m) => sum + ((m['masteryLevel'] ?? 0) as int)) ~/
                   moduleProgress.length;
           final comprehensionScore = (avgMastery / 3 * 100).toInt();
 
