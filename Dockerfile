@@ -8,7 +8,7 @@ ARG API_BASE_URL=https://api.taleem.cksyndic.ma
 
 RUN flutter pub get
 RUN dart run build_runner build --delete-conflicting-outputs
-RUN flutter build web --release --no-tree-shake-icons \
+RUN flutter build web --release --no-tree-shake-icons --no-wasm-dry-run \
     --dart-define=API_BASE_URL=${API_BASE_URL}
 
 # ─── Stage 2: Serve with nginx ───────────────────────────────────────────────
