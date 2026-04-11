@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,18 +27,53 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   bool _isPlaying = false;
   Set<int> _versesMarked = {};
   Timer? _pauseTimer;
-  Timer? _loopTimer;
+
+  // Audio
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  /// Builds the EveryAyah CDN URL for the current verse.
+  /// Format: https://everyayah.com/data/{reciter}/{SSS}{VVV}.mp3
+  String _audioUrl(int surah, int verse) {
+    final s = surah.toString().padLeft(3, '0');
+    final v = verse.toString().padLeft(3, '0');
+    final reciter = widget.goal.reciterFolder.isNotEmpty
+        ? widget.goal.reciterFolder
+        : 'Alafasy_128kbps';
+    return 'https://everyayah.com/data/$reciter/$s$v.mp3';
+  }
 
   @override
   void initState() {
     super.initState();
     _currentVerse = 1;
+
+    // When one play-through of the verse finishes, either loop again or stop.
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      if (_currentLoop < _loopCount - 1) {
+        // Still have loops to do — wait pauseSeconds then replay
+        setState(() => _currentLoop++);
+        _pauseTimer = Timer(Duration(seconds: _pauseSeconds), () {
+          if (mounted && _isPlaying) {
+            _audioPlayer.play(UrlSource(
+              _audioUrl(widget.goal.surahNumber, _currentVerse),
+            ));
+          }
+        });
+      } else {
+        // All loops done
+        setState(() {
+          _isPlaying = false;
+          _currentLoop = 0;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _pauseTimer?.cancel();
-    _loopTimer?.cancel();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -515,30 +551,45 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
     );
   }
 
-  void _togglePlayPause() {
-    setState(() => _isPlaying = !_isPlaying);
-
+  Future<void> _togglePlayPause() async {
     if (_isPlaying) {
-      _loopTimer = Timer.periodic(Duration(seconds: 3 + _pauseSeconds), (timer) {
-        if (_currentLoop < _loopCount - 1) {
-          setState(() => _currentLoop++);
-        } else {
-          timer.cancel();
-          setState(() => _isPlaying = false);
-        }
-      });
+      // Pause
+      _pauseTimer?.cancel();
+      await _audioPlayer.pause();
+      setState(() => _isPlaying = false);
     } else {
-      _loopTimer?.cancel();
+      // Play (resume or start from beginning of current loop)
+      setState(() => _isPlaying = true);
+      final state = _audioPlayer.state;
+      if (state == PlayerState.paused) {
+        await _audioPlayer.resume();
+      } else {
+        await _audioPlayer.play(
+          UrlSource(_audioUrl(widget.goal.surahNumber, _currentVerse)),
+        );
+      }
     }
   }
 
-  void _handleRepeat() {
+  Future<void> _handleRepeat() async {
+    _pauseTimer?.cancel();
+    await _audioPlayer.stop();
     setState(() {
       _currentLoop = 0;
-      _isPlaying = false;
+      _isPlaying = true;
     });
-    _loopTimer?.cancel();
-    _togglePlayPause();
+    await _audioPlayer.play(
+      UrlSource(_audioUrl(widget.goal.surahNumber, _currentVerse)),
+    );
+  }
+
+  Future<void> _stopAudio() async {
+    _pauseTimer?.cancel();
+    await _audioPlayer.stop();
+    setState(() {
+      _isPlaying = false;
+      _currentLoop = 0;
+    });
   }
 
   void _handleMarkKnown() {
@@ -560,25 +611,17 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
     }
   }
 
-  void _nextVerse() {
+  Future<void> _nextVerse() async {
     if (_currentVerse < widget.goal.totalVerses) {
-      setState(() {
-        _currentVerse++;
-        _currentLoop = 0;
-        _isPlaying = false;
-      });
-      _loopTimer?.cancel();
+      await _stopAudio();
+      setState(() => _currentVerse++);
     }
   }
 
-  void _previousVerse() {
+  Future<void> _previousVerse() async {
     if (_currentVerse > 1) {
-      setState(() {
-        _currentVerse--;
-        _currentLoop = 0;
-        _isPlaying = false;
-      });
-      _loopTimer?.cancel();
+      await _stopAudio();
+      setState(() => _currentVerse--);
     }
   }
 }

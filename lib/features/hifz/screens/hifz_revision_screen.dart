@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,6 +18,35 @@ class HifzRevisionScreen extends ConsumerStatefulWidget {
 
 class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
   late int _currentIndex = 0;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _isPlaying = false;
+  int? _playingVerse; // tracks which verse (by index) is currently playing
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  String _audioUrl(int surah, int verse) {
+    final s = surah.toString().padLeft(3, '0');
+    final v = verse.toString().padLeft(3, '0');
+    return 'https://everyayah.com/data/Alafasy_128kbps/$s$v.mp3';
+  }
+
+  Future<void> _toggleAudio(int idx, int surah, int verse) async {
+    if (_isPlaying && _playingVerse == idx) {
+      await _audioPlayer.stop();
+      setState(() { _isPlaying = false; _playingVerse = null; });
+    } else {
+      await _audioPlayer.stop();
+      _audioPlayer.onPlayerComplete.listen((_) {
+        if (mounted) setState(() { _isPlaying = false; _playingVerse = null; });
+      });
+      await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
+      setState(() { _isPlaying = true; _playingVerse = idx; });
+    }
+  }
 
   final surahNames = [
     'الفاتحة', 'البقرة', 'آل عمران', 'النساء', 'المائدة',
@@ -141,7 +171,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
                   itemCount: dueVerses.length,
                   itemBuilder: (context, index) {
                     final verse = dueVerses[index];
-                    return _buildVerseCard(context, ref, verse);
+                    return _buildVerseCard(context, ref, index, verse);
                   },
                 ),
               ),
@@ -152,7 +182,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     );
   }
 
-  Widget _buildVerseCard(BuildContext context, WidgetRef ref, VerseProgressModel verse) {
+  Widget _buildVerseCard(BuildContext context, WidgetRef ref, int idx, VerseProgressModel verse) {
     // Fetch verse text from alquran.cloud (cached per surah by Riverpod)
     final verseAsync = ref.watch(
       quranVerseProvider((surah: verse.surahNumber, verse: verse.verseNumber)),
@@ -264,25 +294,45 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.volume_up, color: AppColors.primary, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Écouter',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
-                        ),
+                GestureDetector(
+                  onTap: () => _toggleAudio(idx, verse.surahNumber, verse.verseNumber),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: (_isPlaying && _playingVerse == idx)
+                          ? AppColors.accent.withOpacity(0.12)
+                          : AppColors.primary.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: (_isPlaying && _playingVerse == idx)
+                            ? AppColors.accent
+                            : AppColors.primary.withOpacity(0.2),
                       ),
-                    ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          (_isPlaying && _playingVerse == idx)
+                              ? Icons.stop_circle_outlined
+                              : Icons.volume_up,
+                          color: (_isPlaying && _playingVerse == idx)
+                              ? AppColors.accent
+                              : AppColors.primary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          (_isPlaying && _playingVerse == idx) ? 'Arrêter' : 'Écouter',
+                          style: TextStyle(
+                            color: (_isPlaying && _playingVerse == idx)
+                                ? AppColors.accent
+                                : AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
