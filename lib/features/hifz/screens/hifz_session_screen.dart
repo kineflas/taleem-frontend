@@ -92,6 +92,9 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
   Future<void> _playVerseAudio(int surah, int verse) async {
     setState(() => _audioError = false);
     try {
+      // audioplayers v6 : un stop() explicite est nécessaire avant play()
+      // si l'état est PlayerState.completed, sinon la lecture échoue silencieusement.
+      await _audioPlayer.stop();
       await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
     } catch (_) {
       try {

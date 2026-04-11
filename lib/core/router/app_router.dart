@@ -135,6 +135,29 @@ final routerProvider = Provider<GoRouter>((ref) {
           moduleNumber: int.parse(state.pathParameters['moduleNumber']!),
         ),
       ),
+
+      // Route généré par ModuleDetailScreen → exercise par moduleId + phaseId
+      GoRoute(
+        path: '/learning/module/:moduleId/phase/:phaseId/exercise',
+        builder: (ctx, state) {
+          final moduleId = int.parse(state.pathParameters['moduleId'] ?? '1');
+          final phaseId  = int.parse(state.pathParameters['phaseId']  ?? '1');
+          switch (moduleId) {
+            case 1:
+              return FlashRecallScreen(moduleNumber: moduleId, phase: phaseId);
+            case 2:
+              return SpatialParticlesScreen(moduleNumber: moduleId, phase: phaseId);
+            case 3:
+              return ChunkingScreen(moduleNumber: moduleId, phase: phaseId);
+            case 4:
+              return RootDiscoveryScreen(moduleNumber: moduleId, phase: phaseId);
+            case 5:
+              return VerseScanScreen(moduleNumber: moduleId, phase: phaseId);
+            default:
+              return FlashRecallScreen(moduleNumber: moduleId, phase: phaseId);
+          }
+        },
+      ),
       GoRoute(
         path: '/learn/flash-recall/:moduleNumber',
         builder: (ctx, state) => FlashRecallScreen(
