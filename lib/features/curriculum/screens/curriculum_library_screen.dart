@@ -77,6 +77,26 @@ class CurriculumLibraryScreen extends ConsumerWidget {
                       ),
                     );
                   }),
+                  // Add special feature cards after the Coran category
+                  if (cat == ProgramCategory.coran) ...[
+                    _FeatureCard(
+                      icon: '🔤',
+                      titleFr: 'Vocabulaire du Coran',
+                      titleAr: 'مفردات القرآن',
+                      subtitleFr: 'Apprenez les mots les plus fréquents du Coran',
+                      color: const Color(0xFF00897B),
+                      onTap: () => context.go('/student/learn'),
+                    ),
+                    const SizedBox(height: 10),
+                    _FeatureCard(
+                      icon: '🕌',
+                      titleFr: 'Hifz Master',
+                      titleAr: 'حفظ القرآن',
+                      subtitleFr: 'Mémorisez le Coran avec un suivi intelligent',
+                      color: const Color(0xFF6A1B9A),
+                      onTap: () => context.go('/student/hifz'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                 ],
               ],
@@ -241,6 +261,98 @@ class _ProgramCard extends StatelessWidget {
                 isEnrolled ? Icons.arrow_forward_ios : Icons.add_circle_outline,
                 color: isEnrolled ? AppColors.primary : AppColors.accent,
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeatureCard extends StatelessWidget {
+  final String icon;
+  final String titleFr;
+  final String titleAr;
+  final String subtitleFr;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _FeatureCard({
+    required this.icon,
+    required this.titleFr,
+    required this.titleAr,
+    required this.subtitleFr,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [color.withOpacity(0.08), color.withOpacity(0.02)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text(icon, style: const TextStyle(fontSize: 28)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      titleFr,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      titleAr,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: color.withOpacity(0.8),
+                        fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                      ),
+                      textDirection: TextDirection.rtl,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitleFr,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, color: color, size: 18),
             ],
           ),
         ),
