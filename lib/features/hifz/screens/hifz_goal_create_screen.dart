@@ -5,6 +5,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../../core/constants/app_colors.dart';
 import '../../autonomous_learning/models/learning_models.dart';
+import '../../autonomous_learning/providers/learning_provider.dart';
 import '../providers/hifz_provider.dart';
 
 class HifzGoalCreateScreen extends ConsumerStatefulWidget {
@@ -20,6 +21,7 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
   int _versesPerDay = 5;
   DateTime? _targetDate;
   String _selectedReciter = 'Alafasy_128kbps';
+  bool _isCreating = false;
 
   final surahNames = [
     'الفاتحة', 'البقرة', 'آل عمران', 'النساء', 'المائدة',
@@ -113,11 +115,17 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _handleCreateGoal,
-                icon: const Text('✨', style: TextStyle(fontSize: 20)),
-                label: const Text(
-                  'Commencer',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                onPressed: _isCreating ? null : _handleCreateGoal,
+                icon: _isCreating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text('✨', style: TextStyle(fontSize: 20)),
+                label: Text(
+                  _isCreating ? 'Création...' : 'Commencer',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
@@ -414,15 +422,43 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
       return;
     }
 
-    // TODO: Call API to create goal
-    // For now, just navigate back
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Objectif créé! 🎉'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+    setState(() => _isCreating = true);
 
-    Navigator.of(context).pop();
+    try {
+      await ref.read(learningApiProvider).createHifzGoal(
+        surahNumber: _selectedSurah,
+        mode: _mode == GoalMode.quantitative ? 'QUANTITATIVE' : 'TEMPORAL',
+        versesPerDay: _mode == GoalMode.quantitative ? _versesPerDay : null,
+        targetDate: _mode == GoalMode.temporal && _targetDate != null
+            ? _targetDate!.toIso8601String().split('T').first
+            : null,
+        reciterId: _selectedReciter,
+      );
+
+      // Invalidate goals provider to refresh the list
+      ref.invalidate(hifzGoalsProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Objectif créé ! 🎉'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        String message = 'Erreur lors de la création';
+        if (e.toString().contains('409')) {
+          message = 'Un objectif pour cette sourate existe déjà';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
   }
 }

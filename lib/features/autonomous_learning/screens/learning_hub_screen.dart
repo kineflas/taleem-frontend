@@ -108,7 +108,7 @@ class LearningHubScreen extends ConsumerWidget {
           isUnlocked: isUnlocked,
           phase: progress?['currentPhase'] ?? 0,
           onTap: isUnlocked
-              ? () => context.push('/learning/module/$moduleNum')
+              ? () => context.push('/learn/module/$moduleNum')
               : null,
         ),
       );
