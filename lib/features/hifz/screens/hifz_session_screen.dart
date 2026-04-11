@@ -9,6 +9,23 @@ import '../../autonomous_learning/models/learning_models.dart';
 import '../providers/hifz_provider.dart';
 import '../providers/quran_provider.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SILSILA — Protocole TIKRAR 6446
+// Phase 0: Lecture   × 6  (texte visible)
+// Phase 1: Récitation × 4 (texte caché — auto-dictée)
+// Phase 2: Lecture   × 4  (texte visible)
+// Phase 3: Récitation × 6 (texte caché — auto-dictée)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _phaseTargets   = [6, 4, 4, 6];
+const _phaseIsRecall  = [false, true, false, true];
+const _phaseGroup     = ['A', 'A', 'B', 'B'];
+const _phaseTypeFr    = ['Lecture', 'Récitation', 'Lecture', 'Récitation'];
+
+enum SessionMode { tikrar, libre }
+
+enum ReviewScore { green, orange, red }
+
 class HifzSessionScreen extends ConsumerStatefulWidget {
   final HifzGoalModel goal;
 
@@ -18,28 +35,44 @@ class HifzSessionScreen extends ConsumerStatefulWidget {
   ConsumerState<HifzSessionScreen> createState() => _HifzSessionScreenState();
 }
 
-class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
+class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
+    with SingleTickerProviderStateMixin {
+  // ── Navigation ───────────────────────────────────────────────────────────
   late int _currentVerse;
-  int _loopCount = 5;
-  int _currentLoop = 0;
-  int _pauseSeconds = 5;
-  int _maskingLevel = 0; // 0=fully visible, 1=30%, 2=60%, 3=auto-dictée
-  bool _isPlaying = false;
-  bool _audioError = false;
+
+  // ── Session mode ─────────────────────────────────────────────────────────
+  SessionMode _sessionMode = SessionMode.tikrar;
+
+  // ── TIKRAR 6446 state ────────────────────────────────────────────────────
+  int  _tikrarPhase    = 0;
+  int  _phaseProgress  = 0;
+  bool _tikrarComplete = false;
+
+  // ── Libre mode state ─────────────────────────────────────────────────────
+  int _loopCount    = 5;
+  int _currentLoop  = 0;
+  int _pauseSeconds = 3;
+
+  // ── Common state ─────────────────────────────────────────────────────────
+  int  _maskingLevel = 0; // 0=visible, 1=30%, 2=60%, 3=premier lettre
+  bool _isPlaying    = false;
+  bool _audioError   = false;
   Set<int> _versesMarked = {};
   Timer? _pauseTimer;
 
-  // Audio
+  // ── Animation ─────────────────────────────────────────────────────────────
+  late AnimationController _phaseAnim;
+
+  // ── Audio ─────────────────────────────────────────────────────────────────
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  /// Normalise le nom du récitateur — certains goals en DB ont des variantes
-  /// incorrectes (ex: 'Al-Husary_128kbps' au lieu de 'Husary_128kbps').
+  // Normalise le nom du récitateur (variantes historiques en DB)
   static const Map<String, String> _reciterAliases = {
-    'Al-Husary_128kbps': 'Husary_128kbps',
-    'Al-Husary_64kbps': 'Husary_64kbps',
-    'Husary': 'Husary_128kbps',
-    'Alafasy': 'Alafasy_128kbps',
-    'Abdul_Basit': 'Abdul_Basit_Murattal_192kbps',
+    'Al-Husary_128kbps':  'Husary_128kbps',
+    'Al-Husary_64kbps':   'Husary_64kbps',
+    'Husary':             'Husary_128kbps',
+    'Alafasy':            'Alafasy_128kbps',
+    'Abdul_Basit':        'Abdul_Basit_Murattal_192kbps',
   };
 
   String get _normalizedReciter {
@@ -49,23 +82,17 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
     return _reciterAliases[raw] ?? raw;
   }
 
-  /// Builds the EveryAyah CDN URL for the given surah/verse.
-  /// Format: https://everyayah.com/data/{reciter}/{SSS}{VVV}.mp3
   String _audioUrl(int surah, int verse, {String? reciterOverride}) {
     final s = surah.toString().padLeft(3, '0');
     final v = verse.toString().padLeft(3, '0');
-    final reciter = reciterOverride ?? _normalizedReciter;
-    return 'https://everyayah.com/data/$reciter/$s$v.mp3';
+    return 'https://everyayah.com/data/${reciterOverride ?? _normalizedReciter}/$s$v.mp3';
   }
 
-  /// Joue un verset avec fallback automatique sur Alafasy si le récitateur
-  /// principal échoue (URL 404 / CORS / format non supporté).
   Future<void> _playVerseAudio(int surah, int verse) async {
     setState(() => _audioError = false);
     try {
       await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
     } catch (_) {
-      // Fallback: essayer Alafasy
       try {
         await _audioPlayer.play(
           UrlSource(_audioUrl(surah, verse, reciterOverride: 'Alafasy_128kbps')),
@@ -81,10 +108,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         }
       } catch (e2) {
         if (mounted) {
-          setState(() {
-            _isPlaying = false;
-            _audioError = true;
-          });
+          setState(() { _isPlaying = false; _audioError = true; });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("Audio indisponible — vérifiez la connexion"),
@@ -97,28 +121,126 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
     }
   }
 
+  // ── TIKRAR logic ──────────────────────────────────────────────────────────
+
+  void _onTikrarAudioComplete() {
+    final target = _phaseTargets[_tikrarPhase];
+    if (_phaseProgress + 1 < target) {
+      // Plus de répétitions dans la phase actuelle
+      setState(() => _phaseProgress++);
+      _pauseTimer = Timer(const Duration(seconds: 2), () {
+        if (mounted && _isPlaying) {
+          _playVerseAudio(widget.goal.surahNumber, _currentVerse);
+        }
+      });
+    } else if (_tikrarPhase < 3) {
+      // Passer à la phase suivante
+      final nextPhase = _tikrarPhase + 1;
+      setState(() {
+        _tikrarPhase   = nextPhase;
+        _phaseProgress = 0;
+        _maskingLevel  = _phaseIsRecall[nextPhase] ? 3 : 0;
+      });
+      _phaseAnim.forward(from: 0);
+
+      final isRecall = _phaseIsRecall[nextPhase];
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            isRecall
+                ? '🎯 Phase ${_phaseGroup[nextPhase]} — Récitation de mémoire !'
+                : '📖 Phase ${_phaseGroup[nextPhase]} — Lecture avec le texte',
+          ),
+          backgroundColor:
+              isRecall ? AppColors.accent : AppColors.primary,
+          duration: const Duration(seconds: 2),
+        ));
+      }
+
+      _pauseTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted && _isPlaying) {
+          _playVerseAudio(widget.goal.surahNumber, _currentVerse);
+        }
+      });
+    } else {
+      // Toutes les phases terminées → évaluation WAQF
+      setState(() {
+        _isPlaying    = false;
+        _tikrarComplete = true;
+      });
+    }
+  }
+
+  void _resetTikrar() {
+    setState(() {
+      _tikrarPhase    = 0;
+      _phaseProgress  = 0;
+      _tikrarComplete = false;
+      _maskingLevel   = 0;
+    });
+  }
+
+  void _onWaqfEval(ReviewScore score) {
+    final labels = {
+      ReviewScore.green:  '✅ Excellent — Prochaine révision dans 7 jours',
+      ReviewScore.orange: '⚠️ Bien — Révision dans 3 jours',
+      ReviewScore.red:    '🔄 À retravailler — Révision demain',
+    };
+    final colors = {
+      ReviewScore.green:  AppColors.success,
+      ReviewScore.orange: AppColors.warning,
+      ReviewScore.red:    AppColors.danger,
+    };
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(labels[score]!),
+        backgroundColor: colors[score],
+        duration: const Duration(seconds: 3),
+      ));
+    }
+
+    // Marquer le verset si score ≥ orange
+    if (score != ReviewScore.red) {
+      _versesMarked.add(_currentVerse);
+    }
+
+    _resetTikrar();
+
+    // Auto-avance si succès ou hésitation
+    if (score != ReviewScore.red && _currentVerse < widget.goal.totalVerses) {
+      Future.delayed(const Duration(milliseconds: 600), _nextVerse);
+    }
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
     _currentVerse = 1;
 
-    // When one play-through of the verse finishes, either loop again or stop.
+    _phaseAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+
     _audioPlayer.onPlayerComplete.listen((_) {
       if (!mounted) return;
-      if (_currentLoop < _loopCount - 1) {
-        // Still have loops to do — wait pauseSeconds then replay
-        setState(() => _currentLoop++);
-        _pauseTimer = Timer(Duration(seconds: _pauseSeconds), () {
-          if (mounted && _isPlaying) {
-            _playVerseAudio(widget.goal.surahNumber, _currentVerse);
-          }
-        });
+      if (_sessionMode == SessionMode.tikrar && !_tikrarComplete) {
+        _onTikrarAudioComplete();
       } else {
-        // All loops done
-        setState(() {
-          _isPlaying = false;
-          _currentLoop = 0;
-        });
+        // Mode Libre
+        if (_currentLoop < _loopCount - 1) {
+          setState(() => _currentLoop++);
+          _pauseTimer = Timer(Duration(seconds: _pauseSeconds), () {
+            if (mounted && _isPlaying) {
+              _playVerseAudio(widget.goal.surahNumber, _currentVerse);
+            }
+          });
+        } else {
+          setState(() { _isPlaying = false; _currentLoop = 0; });
+        }
       }
     });
   }
@@ -126,9 +248,12 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   @override
   void dispose() {
     _pauseTimer?.cancel();
+    _phaseAnim.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -173,15 +298,10 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Vérifiez votre connexion internet',
-                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
-                  onPressed: () => ref.invalidate(quranSurahProvider(widget.goal.surahNumber)),
+                  onPressed: () =>
+                      ref.invalidate(quranSurahProvider(widget.goal.surahNumber)),
                   icon: const Icon(Icons.refresh),
                   label: const Text('Réessayer'),
                   style: ElevatedButton.styleFrom(
@@ -208,14 +328,21 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         elevation: 0,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        actions: [
+          // Mode toggle chip
+          Padding(
+            padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            child: _buildModeToggle(),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Progress bar
+            // ── Barre de progression globale ─────────────────────────────
             Container(
               color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               child: Column(
                 children: [
                   Row(
@@ -243,21 +370,29 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
                       value: _currentVerse / widget.goal.totalVerses,
                       minHeight: 6,
                       backgroundColor: AppColors.heatmapEmpty,
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(AppColors.primary),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // Verse text display
+            // ── Texte du verset ──────────────────────────────────────────
             Container(
               color: Colors.white,
               padding: const EdgeInsets.all(24),
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.divider),
+                border: Border.all(
+                  color: _sessionMode == SessionMode.tikrar && !_tikrarComplete
+                      ? (_phaseIsRecall[_tikrarPhase]
+                          ? AppColors.accent.withOpacity(0.4)
+                          : AppColors.primary.withOpacity(0.3))
+                      : AppColors.divider,
+                  width: 1.5,
+                ),
               ),
               child: Column(
                 children: [
@@ -268,19 +403,20 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
                         ),
                   ),
                   const SizedBox(height: 16),
-                  // Verse text with masking
                   _buildMaskedVerseText(verseText),
-                  const SizedBox(height: 16),
-                  // Masking level indicator
+                  const SizedBox(height: 12),
+                  // Label masquage courant
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text('مستوى الإخفاء: '),
+                      const Text('مستوى الإخفاء: ',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                       Text(
                         ['واضح', '30%', '60%', 'أول حرف'][_maskingLevel],
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
+                          fontSize: 12,
                         ),
                       ),
                     ],
@@ -289,82 +425,339 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
               ),
             ),
 
-            // Loop counter
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.accent.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Text('🔁'),
-                      const SizedBox(width: 8),
-                      Text(
-                        'الاستماع ${_currentLoop + 1}/$_loopCount',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    '⏱️ ${_pauseSeconds}s',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
+            // ── Indicateur TIKRAR ou compteur Libre ──────────────────────
+            if (_sessionMode == SessionMode.tikrar)
+              _buildTikrarPhaseDisplay()
+            else
+              _buildLibreCounter(),
+
             const SizedBox(height: 20),
 
-            // Main controls
-            _buildPlayerControls(),
-            const SizedBox(height: 24),
+            // ── Contrôles audio ou évaluation WAQF ───────────────────────
+            if (_tikrarComplete && _sessionMode == SessionMode.tikrar)
+              _buildWaqfEvaluation()
+            else ...[
+              _buildPlayerControls(),
+              const SizedBox(height: 20),
+              // Masking buttons (visibles en mode libre, et override en tikrar)
+              if (_sessionMode == SessionMode.libre) _buildMaskingButtons(),
+              const SizedBox(height: 16),
+              // Actions (Je le connais / Encore)
+              _buildActionButtons(),
+            ],
 
-            // Bottom action buttons
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-              child: Column(
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Widgets ────────────────────────────────────────────────────────────────
+
+  Widget _buildModeToggle() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _modeChip('6446', SessionMode.tikrar),
+          _modeChip('Libre', SessionMode.libre),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeChip(String label, SessionMode mode) {
+    final isActive = _sessionMode == mode;
+    return GestureDetector(
+      onTap: () {
+        if (_sessionMode == mode) return;
+        _pauseTimer?.cancel();
+        _audioPlayer.stop();
+        setState(() {
+          _sessionMode  = mode;
+          _isPlaying    = false;
+          _currentLoop  = 0;
+          if (mode == SessionMode.libre) _tikrarComplete = false;
+          if (mode == SessionMode.tikrar) _resetTikrar();
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isActive ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: isActive ? AppColors.primary : Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Indicateur de phase TIKRAR — phase A/B + progression en pastilles
+  Widget _buildTikrarPhaseDisplay() {
+    if (_tikrarComplete) return const SizedBox.shrink();
+
+    final isRecall  = _phaseIsRecall[_tikrarPhase];
+    final target    = _phaseTargets[_tikrarPhase];
+    final groupColor = isRecall ? AppColors.accent : AppColors.primary;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: groupColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: groupColor.withOpacity(0.25)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
                 children: [
-                  // Mark as known button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: _versesMarked.contains(_currentVerse)
-                          ? null
-                          : _handleMarkKnown,
-                      icon: const Text('✅', style: TextStyle(fontSize: 20)),
-                      label: const Text(
-                        'Je le connais',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.success,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: AppColors.heatmapEmpty,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: groupColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Phase ${_phaseGroup[_tikrarPhase]}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  // Repeat button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _handleRepeat,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text(
-                        'Encore',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _phaseTypeFr[_tikrarPhase],
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: groupColor,
+                      fontSize: 14,
                     ),
                   ),
+                  if (isRecall) ...[
+                    const SizedBox(width: 6),
+                    const Text('🎯', style: TextStyle(fontSize: 14)),
+                  ] else ...[
+                    const SizedBox(width: 6),
+                    const Text('📖', style: TextStyle(fontSize: 14)),
+                  ],
                 ],
+              ),
+              Text(
+                '${_phaseProgress + 1} / $target',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: groupColor,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Pastilles de progression
+          Row(
+            children: List.generate(target, (i) {
+              final filled = i <= _phaseProgress;
+              return Expanded(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: filled ? groupColor : groupColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 8),
+          // Aperçu des 4 phases
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(4, (i) {
+              final isCurrentPhase = i == _tikrarPhase;
+              final isComplete     = i < _tikrarPhase;
+              final phaseColor     = _phaseIsRecall[i] ? AppColors.accent : AppColors.primary;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: isCurrentPhase ? 28 : 22,
+                      height: isCurrentPhase ? 28 : 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isComplete
+                            ? phaseColor
+                            : isCurrentPhase
+                                ? phaseColor.withOpacity(0.9)
+                                : phaseColor.withOpacity(0.15),
+                        border: isCurrentPhase
+                            ? Border.all(color: phaseColor, width: 2)
+                            : null,
+                      ),
+                      child: Center(
+                        child: Text(
+                          isComplete
+                              ? '✓'
+                              : '${_phaseTargets[i]}',
+                          style: TextStyle(
+                            color: isComplete || isCurrentPhase
+                                ? Colors.white
+                                : phaseColor,
+                            fontWeight: FontWeight.w800,
+                            fontSize: isCurrentPhase ? 11 : 10,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _phaseIsRecall[i] ? '🎯' : '📖',
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Compteur simple mode Libre
+  Widget _buildLibreCounter() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.accent.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Text('🔁'),
+              const SizedBox(width: 8),
+              Text(
+                'Écoute ${_currentLoop + 1}/$_loopCount',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+          Text('⏱️ ${_pauseSeconds}s',
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  /// Évaluation WAQF après TIKRAR complet
+  Widget _buildWaqfEvaluation() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.accent.withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.accent.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text('🎯', style: TextStyle(fontSize: 36)),
+          const SizedBox(height: 8),
+          Text(
+            'WAQF — Évaluation',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Cycle TIKRAR 6446 terminé ! Comment vous en êtes-vous sorti ?',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(child: _waqfButton('🟢', 'Parfait', 'J+7', AppColors.success, () => _onWaqfEval(ReviewScore.green))),
+              const SizedBox(width: 8),
+              Expanded(child: _waqfButton('🟡', 'Bien', 'J+3', AppColors.warning, () => _onWaqfEval(ReviewScore.orange))),
+              const SizedBox(width: 8),
+              Expanded(child: _waqfButton('🔴', 'Difficile', 'J+1', AppColors.danger, () => _onWaqfEval(ReviewScore.red))),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _waqfButton(String emoji, String label, String nextDate, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.4)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 22)),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              nextDate,
+              style: TextStyle(
+                fontSize: 10,
+                color: color.withOpacity(0.7),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -377,7 +770,6 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
     final words = verseText.split(' ');
 
     if (_maskingLevel == 0) {
-      // Fully visible
       return Text(
         verseText,
         textAlign: TextAlign.center,
@@ -389,7 +781,6 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         textDirection: TextDirection.rtl,
       );
     } else if (_maskingLevel == 1) {
-      // 30% masked
       return Wrap(
         alignment: WrapAlignment.center,
         spacing: 8,
@@ -408,7 +799,6 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         }).toList(),
       );
     } else if (_maskingLevel == 2) {
-      // 60% masked
       return Wrap(
         alignment: WrapAlignment.center,
         spacing: 8,
@@ -427,7 +817,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         }).toList(),
       );
     } else {
-      // Auto-dictée: show only first letter
+      // Auto-dictée: seulement le premier caractère
       return Wrap(
         alignment: WrapAlignment.center,
         spacing: 8,
@@ -435,7 +825,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         textDirection: TextDirection.rtl,
         children: words.map((word) {
           return Text(
-            '${word[0]}__',
+            word.isNotEmpty ? '${word[0]}___' : '',
             style: GoogleFonts.amiri(
               fontSize: 24,
               fontWeight: FontWeight.w700,
@@ -450,97 +840,65 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   Widget _buildPlayerControls() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          // Play/Pause + Controls row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Loop stepper
-              _buildControl(
-                '🔁',
-                '$_loopCount',
-                () => setState(() => _loopCount = (_loopCount - 1).clamp(1, 20)),
-                () => setState(() => _loopCount = (_loopCount + 1).clamp(1, 20)),
-              ),
-              // Play button (large center)
-              GestureDetector(
-                onTap: _audioError ? null : _togglePlayPause,
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: _audioError
-                        ? AppColors.danger
-                        : AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: _audioError
-                        ? const Icon(Icons.wifi_off, color: Colors.white, size: 28)
-                        : Text(
-                            _isPlaying ? '⏸️' : '▶️',
-                            style: const TextStyle(fontSize: 32),
-                          ),
-                  ),
-                ),
-              ),
-              // Pause stepper
-              _buildControl(
-                '⏸️',
-                '${_pauseSeconds}s',
-                () => setState(() => _pauseSeconds = (_pauseSeconds - 1).clamp(0, 60)),
-                () => setState(() => _pauseSeconds = (_pauseSeconds + 1).clamp(0, 60)),
-              ),
-            ],
+          // Bouton précédent
+          IconButton(
+            onPressed: _currentVerse > 1 ? _previousVerse : null,
+            icon: const Icon(Icons.skip_previous, size: 28),
+            color: AppColors.primary,
           ),
-          const SizedBox(height: 20),
-          // Masking level toggle
-          Row(
-            children: [
-              Expanded(
-                child: _buildMaskingButton('واضح', 0),
+
+          // Bouton play (Libre: stepper loop; TIKRAR: juste play/pause)
+          if (_sessionMode == SessionMode.libre)
+            _buildControl(
+              '🔁',
+              '$_loopCount',
+              () => setState(() => _loopCount = (_loopCount - 1).clamp(1, 20)),
+              () => setState(() => _loopCount = (_loopCount + 1).clamp(1, 20)),
+            ),
+
+          GestureDetector(
+            onTap: _audioError ? null : _togglePlayPause,
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: _audioError ? AppColors.danger : AppColors.primary,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMaskingButton('30%', 1),
+              child: Center(
+                child: _audioError
+                    ? const Icon(Icons.wifi_off, color: Colors.white, size: 28)
+                    : Text(
+                        _isPlaying ? '⏸️' : '▶️',
+                        style: const TextStyle(fontSize: 32),
+                      ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMaskingButton('60%', 2),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildMaskingButton('أول', 3),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 16),
-          // Navigation
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _currentVerse > 1 ? _previousVerse : null,
-                  icon: const Icon(Icons.navigate_before),
-                  label: const Text('السابق'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary.withOpacity(0.6),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _currentVerse < widget.goal.totalVerses ? _nextVerse : null,
-                  icon: const Icon(Icons.navigate_next),
-                  label: const Text('التالي'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary.withOpacity(0.6),
-                  ),
-                ),
-              ),
-            ],
+
+          if (_sessionMode == SessionMode.libre)
+            _buildControl(
+              '⏱️',
+              '${_pauseSeconds}s',
+              () => setState(() => _pauseSeconds = (_pauseSeconds - 1).clamp(0, 60)),
+              () => setState(() => _pauseSeconds = (_pauseSeconds + 1).clamp(0, 60)),
+            ),
+
+          // Bouton suivant
+          IconButton(
+            onPressed: _currentVerse < widget.goal.totalVerses ? _nextVerse : null,
+            icon: const Icon(Icons.skip_next, size: 28),
+            color: AppColors.primary,
           ),
         ],
       ),
@@ -554,12 +912,13 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
             onTap: onMinus,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: const Icon(Icons.remove, size: 16),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Icon(Icons.remove, size: 16),
             ),
           ),
           Padding(
@@ -567,7 +926,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 18)),
+                Text(emoji, style: const TextStyle(fontSize: 16)),
                 Text(
                   label,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -579,11 +938,28 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
           ),
           GestureDetector(
             onTap: onPlus,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: const Icon(Icons.add, size: 16),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Icon(Icons.add, size: 16),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaskingButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(child: _buildMaskingButton('واضح', 0)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildMaskingButton('30%', 1)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildMaskingButton('60%', 2)),
+          const SizedBox(width: 6),
+          Expanded(child: _buildMaskingButton('أول', 3)),
         ],
       ),
     );
@@ -599,23 +975,69 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         side: BorderSide(
           color: isSelected ? AppColors.primary : AppColors.divider,
         ),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w700),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Column(
+        children: [
+          // Bouton "Je le connais"
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _versesMarked.contains(_currentVerse) ? null : _handleMarkKnown,
+              icon: const Text('✅', style: TextStyle(fontSize: 20)),
+              label: Text(
+                _versesMarked.contains(_currentVerse) ? 'Mémorisé ✓' : 'Je le connais',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.success,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.heatmapEmpty,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Bouton "Encore"
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _handleRepeat,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Encore', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          if (_sessionMode == SessionMode.tikrar) ...[
+            const SizedBox(height: 10),
+            // Override masking en tikrar (optionnel)
+            Text(
+              'Mode TIKRAR actif — masquage automatique par phase',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ],
       ),
     );
   }
 
+  // ── Actions ───────────────────────────────────────────────────────────────
+
   Future<void> _togglePlayPause() async {
     if (_isPlaying) {
-      // Pause
       _pauseTimer?.cancel();
       await _audioPlayer.pause();
       setState(() => _isPlaying = false);
     } else {
-      // Play (resume or start from beginning of current loop)
       setState(() => _isPlaying = true);
       final state = _audioPlayer.state;
       if (state == PlayerState.paused) {
@@ -629,27 +1051,21 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   Future<void> _handleRepeat() async {
     _pauseTimer?.cancel();
     await _audioPlayer.stop();
-    setState(() {
-      _currentLoop = 0;
-      _isPlaying = true;
-    });
+    if (_sessionMode == SessionMode.tikrar) {
+      _resetTikrar();
+    }
+    setState(() { _isPlaying = true; _currentLoop = 0; });
     await _playVerseAudio(widget.goal.surahNumber, _currentVerse);
   }
 
   Future<void> _stopAudio() async {
     _pauseTimer?.cancel();
     await _audioPlayer.stop();
-    setState(() {
-      _isPlaying = false;
-      _currentLoop = 0;
-    });
+    setState(() { _isPlaying = false; _currentLoop = 0; });
   }
 
   void _handleMarkKnown() {
-    setState(() {
-      _versesMarked.add(_currentVerse);
-    });
-
+    setState(() => _versesMarked.add(_currentVerse));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('الآية $_currentVerse مسجلة ✅'),
@@ -657,8 +1073,6 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         duration: const Duration(seconds: 1),
       ),
     );
-
-    // Auto-advance to next verse
     if (_currentVerse < widget.goal.totalVerses) {
       Future.delayed(const Duration(milliseconds: 500), _nextVerse);
     }
@@ -667,14 +1081,30 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   Future<void> _nextVerse() async {
     if (_currentVerse < widget.goal.totalVerses) {
       await _stopAudio();
-      setState(() => _currentVerse++);
+      setState(() {
+        _currentVerse++;
+        if (_sessionMode == SessionMode.tikrar) {
+          _tikrarPhase    = 0;
+          _phaseProgress  = 0;
+          _tikrarComplete = false;
+          _maskingLevel   = 0;
+        }
+      });
     }
   }
 
   Future<void> _previousVerse() async {
     if (_currentVerse > 1) {
       await _stopAudio();
-      setState(() => _currentVerse--);
+      setState(() {
+        _currentVerse--;
+        if (_sessionMode == SessionMode.tikrar) {
+          _tikrarPhase    = 0;
+          _phaseProgress  = 0;
+          _tikrarComplete = false;
+          _maskingLevel   = 0;
+        }
+      });
     }
   }
 }

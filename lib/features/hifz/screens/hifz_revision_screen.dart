@@ -9,6 +9,25 @@ import '../../autonomous_learning/models/learning_models.dart';
 import '../providers/hifz_provider.dart';
 import '../providers/quran_provider.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SILSILA — Mode MURAJA'A SMART
+//
+// 3 innovations vs la version précédente :
+//   1. Interleaving automatique : les versets sont triés par alternance de
+//      sourates pour forcer la discrimination (Rohrer & Taylor, 2007 : +43-76%)
+//   2. Évaluation 3 niveaux (🟢 J+7 / 🟡 J+3 / 🔴 J+1) au lieu du binaire
+//   3. Versets 🔴 remontent en priorité dans la session
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ReviewScore { green, orange, red }
+
+// Intervals adaptatifs selon le score
+const _reviewIntervals = {
+  ReviewScore.green:  7,
+  ReviewScore.orange: 3,
+  ReviewScore.red:    1,
+};
+
 class HifzRevisionScreen extends ConsumerStatefulWidget {
   const HifzRevisionScreen({super.key});
 
@@ -19,8 +38,11 @@ class HifzRevisionScreen extends ConsumerStatefulWidget {
 class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
   late int _currentIndex = 0;
   final AudioPlayer _audioPlayer = AudioPlayer();
-  bool _isPlaying = false;
-  int? _playingVerse; // tracks which verse (by index) is currently playing
+  bool _isPlaying  = false;
+  int? _playingVerse;
+
+  // Cache des scores de la session en cours
+  final Map<String, ReviewScore> _sessionScores = {};
 
   @override
   void dispose() {
@@ -51,7 +73,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Audio indisponible pour ce verset'),
-              backgroundColor: Color(0xFFE53E3E),
+              backgroundColor: AppColors.danger,
               duration: Duration(seconds: 3),
             ),
           );
@@ -60,12 +82,73 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     }
   }
 
-  final surahNames = [
+  // ── Interleaving sort ────────────────────────────────────────────────────
+  // Algorithme : trier par ordre de priorité (🔴 > 🟡 > 🟢) puis interleaver
+  // les sourates (alterner) pour forcer la discrimination.
+  List<VerseProgressModel> _applyInterleaving(List<VerseProgressModel> verses) {
+    if (verses.length <= 1) return verses;
+
+    // Trier par mastery : red en premier, puis orange, puis green
+    final sorted = [...verses]..sort((a, b) {
+      final priorityA = a.mastery == VerseMastery.red ? 0 : a.mastery == VerseMastery.orange ? 1 : 2;
+      final priorityB = b.mastery == VerseMastery.red ? 0 : b.mastery == VerseMastery.orange ? 1 : 2;
+      if (priorityA != priorityB) return priorityA.compareTo(priorityB);
+      return a.surahNumber.compareTo(b.surahNumber);
+    });
+
+    // Interleaving par sourate : on distribue les versets en alternant les sourates
+    final Map<int, List<VerseProgressModel>> bySurah = {};
+    for (final v in sorted) {
+      bySurah.putIfAbsent(v.surahNumber, () => []).add(v);
+    }
+
+    final surahKeys = bySurah.keys.toList();
+    final result = <VerseProgressModel>[];
+    int maxLen = bySurah.values.map((l) => l.length).reduce((a, b) => a > b ? a : b);
+
+    for (int i = 0; i < maxLen; i++) {
+      for (final key in surahKeys) {
+        final list = bySurah[key]!;
+        if (i < list.length) result.add(list[i]);
+      }
+    }
+
+    return result;
+  }
+
+  // ── Noms des sourates (114 entrées complètes) ─────────────────────────────
+  static const List<String> _surahNames = [
     'الفاتحة', 'البقرة', 'آل عمران', 'النساء', 'المائدة',
     'الأنعام', 'الأعراف', 'الأنفال', 'التوبة', 'يونس',
     'هود', 'يوسف', 'الرعد', 'إبراهيم', 'الحجر',
     'النحل', 'الإسراء', 'الكهف', 'مريم', 'طه',
+    'الأنبياء', 'الحج', 'المؤمنون', 'النور', 'الفرقان',
+    'الشعراء', 'النمل', 'القصص', 'العنكبوت', 'الروم',
+    'لقمان', 'السجدة', 'الأحزاب', 'سبأ', 'فاطر',
+    'يس', 'الصافات', 'ص', 'الزمر', 'غافر',
+    'فصلت', 'الشورى', 'الزخرف', 'الدخان', 'الجاثية',
+    'الأحقاف', 'محمد', 'الفتح', 'الحجرات', 'ق',
+    'الذاريات', 'الطور', 'النجم', 'القمر', 'الرحمن',
+    'الواقعة', 'الحديد', 'المجادلة', 'الحشر', 'الممتحنة',
+    'الصف', 'الجمعة', 'المنافقون', 'التغابن', 'الطلاق',
+    'التحريم', 'الملك', 'القلم', 'الحاقة', 'المعارج',  // ← Al-Ma'arij (70)
+    'نوح', 'الجن', 'المزمل', 'المدثر', 'القيامة',
+    'الإنسان', 'المرسلات', 'النبأ', 'النازعات', 'عبس',
+    'التكوير', 'الإنفطار', 'المطففين', 'الانشقاق', 'البروج',
+    'الطارق', 'الأعلى', 'الغاشية', 'الفجر', 'البلد',
+    'الشمس', 'الليل', 'الضحى', 'الشرح', 'التين',
+    'العلق', 'القدر', 'البينة', 'الزلزلة', 'العاديات',
+    'القارعة', 'التكاثر', 'العصر', 'الهمزة', 'الفيل',
+    'قريش', 'الماعون', 'الكوثر', 'الكافرون', 'النصر',
+    'المسد', 'الإخلاص', 'الفلق', 'الناس',
   ];
+
+  String _surahName(int surahNumber) {
+    if (surahNumber < 1 || surahNumber > _surahNames.length) return 'سورة $surahNumber';
+    return _surahNames[surahNumber - 1];
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +157,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Révisions'),
+        title: const Text('Murājaʿa — Révisions'),
         elevation: 0,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -87,96 +170,102 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
             child: Text('Erreur: $e'),
           ),
         ),
-        data: (verses) {
-          final dueVerses = verses.where((v) {
+        data: (allVerses) {
+          // Filtrer les versets dus
+          final rawDue = allVerses.where((v) {
             final nextReview = DateTime.parse(v.nextReviewDate);
             return nextReview.isBefore(DateTime.now().add(const Duration(days: 1)));
           }).toList();
 
+          // Appliquer l'interleaving
+          final dueVerses = _applyInterleaving(rawDue);
+
           if (dueVerses.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('🎉', style: TextStyle(fontSize: 64)),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Aucune révision requise!',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Bravo, vous êtes à jour!',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                  ),
-                ],
-              ),
-            );
+            return _buildEmptyState(context);
           }
+
+          // Statistiques rapides
+          final redCount    = rawDue.where((v) => v.mastery == VerseMastery.red).length;
+          final orangeCount = rawDue.where((v) => v.mastery == VerseMastery.orange).length;
+          final greenCount  = rawDue.where((v) => v.mastery == VerseMastery.green).length;
 
           return Column(
             children: [
-              // Summary header
+              // En-tête résumé
               Container(
                 color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                child: Column(
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Versets à revoir',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Versets à revoir',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_currentIndex + 1} / ${dueVerses.length}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_currentIndex + 1} / ${dueVerses.length}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
+                        // Répartition mastery
+                        Row(
+                          children: [
+                            _masteryChip('🔴', redCount, Colors.red),
+                            const SizedBox(width: 6),
+                            _masteryChip('🟡', orangeCount, Colors.orange),
+                            const SizedBox(width: 6),
+                            _masteryChip('🟢', greenCount, Colors.green),
+                          ],
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${dueVerses.length} 📖',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.accent,
-                        ),
+                    const SizedBox(height: 10),
+                    // Barre de progression
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: (_currentIndex + 1) / dueVerses.length,
+                        minHeight: 6,
+                        backgroundColor: AppColors.heatmapEmpty,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // Progress bar
+              // Interleaving notice
               Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: (_currentIndex + 1) / dueVerses.length,
-                    minHeight: 6,
-                    backgroundColor: AppColors.heatmapEmpty,
-                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                  ),
+                color: AppColors.primary.withOpacity(0.05),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('🔀', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Ordre interleaving actif — alternance des sourates',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: AppColors.primary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                    ),
+                  ],
                 ),
               ),
 
-              // Verse display
+              // Cartes de versets (PageView)
               Expanded(
                 child: PageView.builder(
                   onPageChanged: (index) => setState(() => _currentIndex = index),
@@ -194,18 +283,80 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     );
   }
 
-  Widget _buildVerseCard(BuildContext context, WidgetRef ref, int idx, VerseProgressModel verse) {
-    // Fetch verse text from alquran.cloud (cached per surah by Riverpod)
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('🎉', style: TextStyle(fontSize: 64)),
+          const SizedBox(height: 16),
+          Text(
+            'Aucune révision requise !',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Bravo, vous êtes à jour !',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.success.withOpacity(0.3)),
+            ),
+            child: Text(
+              'Revenez demain pour la prochaine session de révision espacée.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.success,
+                    fontStyle: FontStyle.italic,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _masteryChip(String emoji, int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        '$emoji $count',
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVerseCard(
+      BuildContext context, WidgetRef ref, int idx, VerseProgressModel verse) {
     final verseAsync = ref.watch(
       quranVerseProvider((surah: verse.surahNumber, verse: verse.verseNumber)),
     );
+    final sessionScore = _sessionScores[verse.id];
+    final alreadyScored = sessionScore != null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Verse header
+          // ── Entête du verset ──────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -213,68 +364,38 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.divider),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${surahNames[verse.surahNumber - 1]}:${verse.verseNumber}',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          DateFormat('dd/MM/yyyy', 'fr').format(
-                            DateTime.parse(verse.nextReviewDate),
-                          ),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                        ),
-                      ],
+                    Text(
+                      '${_surahName(verse.surahNumber)} : ${verse.verseNumber}',
+                      style: GoogleFonts.amiri(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                      textDirection: TextDirection.rtl,
                     ),
-                    // Mastery badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: verse.mastery.color.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: verse.mastery.color),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(verse.mastery == VerseMastery.red
-                              ? '🔴'
-                              : verse.mastery == VerseMastery.orange
-                                  ? '🟡'
-                                  : '🟢'),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${verse.masteryScore}%',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                              color: verse.mastery.color,
-                            ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Prochaine révision : ${DateFormat('dd/MM/yyyy', 'fr').format(DateTime.parse(verse.nextReviewDate))}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
                           ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
+                // Badge mastery actuel
+                _masteryBadge(verse),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Verse text — loaded from alquran.cloud
+          // ── Texte du verset ───────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -286,7 +407,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
               children: [
                 verseAsync.when(
                   loading: () => const SizedBox(
-                    height: 48,
+                    height: 60,
                     child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   ),
                   error: (_, __) => Text(
@@ -306,6 +427,7 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                // Bouton audio
                 GestureDetector(
                   onTap: () => _toggleAudio(idx, verse.surahNumber, verse.verseNumber),
                   child: Container(
@@ -350,106 +472,288 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // Stats
+          // ── Statistiques ──────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.05),
+              color: AppColors.primary.withOpacity(0.04),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+              border: Border.all(color: AppColors.primary.withOpacity(0.12)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatItem('📖', verse.totalListens.toString(), 'Écoutes'),
-                _buildStatItem('✅', verse.consecutiveSuccesses.toString(), 'Succès'),
-                _buildStatItem('🔄', verse.reviewCount.toString(), 'Révisions'),
+                _statItem('📖', verse.totalListens.toString(), 'Écoutes'),
+                _statItem('✅', verse.consecutiveSuccesses.toString(), 'Succès consécutifs'),
+                _statItem('🔄', verse.reviewCount.toString(), 'Révisions'),
+                _statItem('🎯', '${verse.masteryScore}%', 'Maîtrise'),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // Action buttons
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Success button
-              ElevatedButton.icon(
-                onPressed: () => _handleVerseReview(true),
-                icon: const Text('✅', style: TextStyle(fontSize: 18)),
-                label: const Text(
-                  'Je m\'en souviens',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          // ── Évaluation MURAJA'A SMART ─────────────────────────────────
+          if (alreadyScored)
+            _buildScoredFeedback(context, sessionScore!, verse)
+          else
+            _buildEvaluationButtons(context, verse),
+        ],
+      ),
+    );
+  }
+
+  /// Affichage après que l'élève a noté ce verset dans cette session
+  Widget _buildScoredFeedback(
+      BuildContext context, ReviewScore score, VerseProgressModel verse) {
+    final config = {
+      ReviewScore.green: (
+        emoji: '🟢',
+        label: 'Mémorisé',
+        color: AppColors.success,
+        daysFr: '7 jours',
+      ),
+      ReviewScore.orange: (
+        emoji: '🟡',
+        label: 'Hésitation',
+        color: AppColors.warning,
+        daysFr: '3 jours',
+      ),
+      ReviewScore.red: (
+        emoji: '🔴',
+        label: 'À retravailler',
+        color: AppColors.danger,
+        daysFr: 'demain',
+      ),
+    }[score]!;
+
+    final nextDate = DateTime.now().add(Duration(days: _reviewIntervals[score]!));
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: config.color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: config.color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Text(config.emoji, style: const TextStyle(fontSize: 28)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  config.label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: config.color,
+                  ),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                const SizedBox(height: 2),
+                Text(
+                  'Prochaine révision : ${DateFormat('dd/MM/yyyy', 'fr').format(nextDate)} (${config.daysFr})',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Failure button
-              OutlinedButton.icon(
-                onPressed: () => _handleVerseReview(false),
-                icon: const Text('❌', style: TextStyle(fontSize: 18)),
-                label: const Text(
-                  'À revoir',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.danger, width: 2),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String emoji, String value, String label) {
+  /// Les 3 boutons d'évaluation MURAJA'A SMART
+  Widget _buildEvaluationButtons(BuildContext context, VerseProgressModel verse) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Auto-évaluation',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+
+        // 🟢 Mémorisé
+        _evalButton(
+          context: context,
+          emoji: '🟢',
+          label: 'Mémorisé',
+          sublabel: 'Révision dans 7 jours',
+          color: AppColors.success,
+          onTap: () => _handleReview(verse, ReviewScore.green),
+        ),
+        const SizedBox(height: 8),
+
+        // 🟡 Hésitation
+        _evalButton(
+          context: context,
+          emoji: '🟡',
+          label: 'Hésitation',
+          sublabel: 'Révision dans 3 jours',
+          color: AppColors.warning,
+          onTap: () => _handleReview(verse, ReviewScore.orange),
+        ),
+        const SizedBox(height: 8),
+
+        // 🔴 Oublié
+        _evalButton(
+          context: context,
+          emoji: '🔴',
+          label: 'Oublié',
+          sublabel: 'Révision demain',
+          color: AppColors.danger,
+          onTap: () => _handleReview(verse, ReviewScore.red),
+        ),
+      ],
+    );
+  }
+
+  Widget _evalButton({
+    required BuildContext context,
+    required String emoji,
+    required String label,
+    required String sublabel,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.35), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    sublabel,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: color.withOpacity(0.5)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _masteryBadge(VerseProgressModel verse) {
+    final emoji = verse.mastery == VerseMastery.red
+        ? '🔴'
+        : verse.mastery == VerseMastery.orange
+            ? '🟡'
+            : '🟢';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: verse.mastery.color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: verse.mastery.color),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji),
+          const SizedBox(width: 4),
+          Text(
+            '${verse.masteryScore}%',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: verse.mastery.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statItem(String emoji, String value, String label) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
+        Text(emoji, style: const TextStyle(fontSize: 18)),
+        const SizedBox(height: 2),
         Text(
           value,
           style: const TextStyle(
             fontWeight: FontWeight.w800,
-            fontSize: 16,
+            fontSize: 15,
             color: AppColors.primary,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  void _handleVerseReview(bool success) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(success ? '✅ Excellent!' : '🔄 À bientôt!'),
-        backgroundColor: success ? AppColors.success : AppColors.warning,
-        duration: const Duration(seconds: 1),
-      ),
-    );
+  // ── Handler principal ─────────────────────────────────────────────────────
 
-    // TODO: Call API to record review result
-    // For now, simulate moving to next verse
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    });
+  void _handleReview(VerseProgressModel verse, ReviewScore score) {
+    // Enregistrer le score dans le cache session
+    setState(() => _sessionScores[verse.id] = score);
+
+    final msgs = {
+      ReviewScore.green:  '✅ Excellent — Prochaine révision dans 7 jours',
+      ReviewScore.orange: '⚠️ Bien — Révision dans 3 jours',
+      ReviewScore.red:    '🔄 À retravailler — Révision demain',
+    };
+    final colors = {
+      ReviewScore.green:  AppColors.success,
+      ReviewScore.orange: AppColors.warning,
+      ReviewScore.red:    AppColors.danger,
+    };
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msgs[score]!),
+      backgroundColor: colors[score],
+      duration: const Duration(seconds: 2),
+    ));
+
+    // TODO: API call — enregistrer le score en base
+    // ref.read(learningApiProvider).recordVerseReview(
+    //   verseId: verse.id,
+    //   score: score.name.toUpperCase(),
+    //   nextReviewDays: _reviewIntervals[score]!,
+    // );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart' hide TextDirection;
+import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -217,7 +217,7 @@ class HifzHubScreen extends ConsumerWidget {
   Widget _buildGoalCard(BuildContext context, WidgetRef ref, HifzGoalModel goal) {
     final surahNames = _getSurahNames();
     final surahName = surahNames[goal.surahNumber - 1];
-    final progress = goal.totalVerses > 0 ? goal.versesMemorized / goal.totalVerses : 0.0;
+    final progress = goal.totalVerses > 0 ? goal.versesMemorized / goal.totalVerses : 0;
 
     return GestureDetector(
       onTap: () {
@@ -521,7 +521,7 @@ class HifzHubScreen extends ConsumerWidget {
       {'ar': 'الملك', 'en': 'Al-Mulk'},
       {'ar': 'القلم', 'en': 'Al-Qalam'},
       {'ar': 'الحاقة', 'en': 'Al-Haqqah'},
-      {'ar': 'المعارج', 'en': 'Al-Ma'arij'},
+      {'ar': 'المعارج', 'en': "Al-Ma'arij"},  // ← Sourate 70 (manquante)
       {'ar': 'نوح', 'en': 'Nuh'},
       {'ar': 'الجن', 'en': 'Al-Jinn'},
       {'ar': 'المزمل', 'en': 'Al-Muzzammil'},
