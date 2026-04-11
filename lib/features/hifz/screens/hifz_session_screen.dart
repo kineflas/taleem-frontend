@@ -25,21 +25,76 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
   int _pauseSeconds = 5;
   int _maskingLevel = 0; // 0=fully visible, 1=30%, 2=60%, 3=auto-dictée
   bool _isPlaying = false;
+  bool _audioError = false;
   Set<int> _versesMarked = {};
   Timer? _pauseTimer;
 
   // Audio
   final AudioPlayer _audioPlayer = AudioPlayer();
 
-  /// Builds the EveryAyah CDN URL for the current verse.
-  /// Format: https://everyayah.com/data/{reciter}/{SSS}{VVV}.mp3
-  String _audioUrl(int surah, int verse) {
-    final s = surah.toString().padLeft(3, '0');
-    final v = verse.toString().padLeft(3, '0');
-    final reciter = widget.goal.reciterFolder.isNotEmpty
+  /// Normalise le nom du récitateur — certains goals en DB ont des variantes
+  /// incorrectes (ex: 'Al-Husary_128kbps' au lieu de 'Husary_128kbps').
+  static const Map<String, String> _reciterAliases = {
+    'Al-Husary_128kbps': 'Husary_128kbps',
+    'Al-Husary_64kbps': 'Husary_64kbps',
+    'Husary': 'Husary_128kbps',
+    'Alafasy': 'Alafasy_128kbps',
+    'Abdul_Basit': 'Abdul_Basit_Murattal_192kbps',
+  };
+
+  String get _normalizedReciter {
+    final raw = widget.goal.reciterFolder.isNotEmpty
         ? widget.goal.reciterFolder
         : 'Alafasy_128kbps';
+    return _reciterAliases[raw] ?? raw;
+  }
+
+  /// Builds the EveryAyah CDN URL for the given surah/verse.
+  /// Format: https://everyayah.com/data/{reciter}/{SSS}{VVV}.mp3
+  String _audioUrl(int surah, int verse, {String? reciterOverride}) {
+    final s = surah.toString().padLeft(3, '0');
+    final v = verse.toString().padLeft(3, '0');
+    final reciter = reciterOverride ?? _normalizedReciter;
     return 'https://everyayah.com/data/$reciter/$s$v.mp3';
+  }
+
+  /// Joue un verset avec fallback automatique sur Alafasy si le récitateur
+  /// principal échoue (URL 404 / CORS / format non supporté).
+  Future<void> _playVerseAudio(int surah, int verse) async {
+    setState(() => _audioError = false);
+    try {
+      await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
+    } catch (_) {
+      // Fallback: essayer Alafasy
+      try {
+        await _audioPlayer.play(
+          UrlSource(_audioUrl(surah, verse, reciterOverride: 'Alafasy_128kbps')),
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Récitateur indisponible — lecture avec Alafasy"),
+              backgroundColor: AppColors.warning,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (e2) {
+        if (mounted) {
+          setState(() {
+            _isPlaying = false;
+            _audioError = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Audio indisponible — vérifiez la connexion"),
+              backgroundColor: AppColors.danger,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -55,9 +110,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
         setState(() => _currentLoop++);
         _pauseTimer = Timer(Duration(seconds: _pauseSeconds), () {
           if (mounted && _isPlaying) {
-            _audioPlayer.play(UrlSource(
-              _audioUrl(widget.goal.surahNumber, _currentVerse),
-            ));
+            _playVerseAudio(widget.goal.surahNumber, _currentVerse);
           }
         });
       } else {
@@ -412,19 +465,23 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
               ),
               // Play button (large center)
               GestureDetector(
-                onTap: _togglePlayPause,
+                onTap: _audioError ? null : _togglePlayPause,
                 child: Container(
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: AppColors.primary,
+                    color: _audioError
+                        ? AppColors.danger
+                        : AppColors.primary,
                     shape: BoxShape.circle,
                   ),
                   child: Center(
-                    child: Text(
-                      _isPlaying ? '⏸️' : '▶️',
-                      style: const TextStyle(fontSize: 32),
-                    ),
+                    child: _audioError
+                        ? const Icon(Icons.wifi_off, color: Colors.white, size: 28)
+                        : Text(
+                            _isPlaying ? '⏸️' : '▶️',
+                            style: const TextStyle(fontSize: 32),
+                          ),
                   ),
                 ),
               ),
@@ -564,9 +621,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
       if (state == PlayerState.paused) {
         await _audioPlayer.resume();
       } else {
-        await _audioPlayer.play(
-          UrlSource(_audioUrl(widget.goal.surahNumber, _currentVerse)),
-        );
+        await _playVerseAudio(widget.goal.surahNumber, _currentVerse);
       }
     }
   }
@@ -578,9 +633,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
       _currentLoop = 0;
       _isPlaying = true;
     });
-    await _audioPlayer.play(
-      UrlSource(_audioUrl(widget.goal.surahNumber, _currentVerse)),
-    );
+    await _playVerseAudio(widget.goal.surahNumber, _currentVerse);
   }
 
   Future<void> _stopAudio() async {

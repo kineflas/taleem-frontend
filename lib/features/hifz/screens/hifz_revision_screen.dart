@@ -43,8 +43,20 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
       _audioPlayer.onPlayerComplete.listen((_) {
         if (mounted) setState(() { _isPlaying = false; _playingVerse = null; });
       });
-      await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
-      setState(() { _isPlaying = true; _playingVerse = idx; });
+      try {
+        await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
+        setState(() { _isPlaying = true; _playingVerse = idx; });
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Audio indisponible pour ce verset'),
+              backgroundColor: Color(0xFFE53E3E),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
     }
   }
 

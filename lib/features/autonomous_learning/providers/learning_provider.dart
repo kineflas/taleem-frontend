@@ -146,8 +146,8 @@ class LearningApiService {
     } on DioException {
       return [
         const ReciterModel(id: 'Alafasy_128kbps', nameEn: 'Mishary Alafasy', nameAr: 'مشاري العفاسي'),
-        const ReciterModel(id: 'Al-Husary_128kbps', nameEn: 'Ali Al-Husary', nameAr: 'علي الحصري'),
-        const ReciterModel(id: 'Abdul_Basit_128kbps', nameEn: 'Abdul Basit', nameAr: 'عبد الباسط'),
+        const ReciterModel(id: 'Husary_128kbps', nameEn: 'Mahmoud Al-Husary', nameAr: 'محمود خليل الحصري'),
+        const ReciterModel(id: 'Abdul_Basit_Murattal_192kbps', nameEn: 'Abdul Basit Murattal', nameAr: 'عبد الباسط عبد الصمد'),
       ];
     }
   }
