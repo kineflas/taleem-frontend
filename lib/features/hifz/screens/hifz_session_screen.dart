@@ -216,7 +216,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen> {
                   ),
                   const SizedBox(height: 16),
                   // Verse text with masking
-                  _buildMaskedVerseText(_currentVerseText),
+                  _buildMaskedVerseText(verseText),
                   const SizedBox(height: 16),
                   // Masking level indicator
                   Row(
