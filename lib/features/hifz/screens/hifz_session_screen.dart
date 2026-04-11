@@ -1,5 +1,7 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
@@ -9,6 +11,7 @@ import '../../autonomous_learning/models/learning_models.dart';
 import '../models/hifz_score_model.dart';
 import '../providers/hifz_provider.dart';
 import '../providers/quran_provider.dart';
+import 'hifz_revision_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SILSILA — Protocole TIKRAR 6446
@@ -61,6 +64,16 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
   Set<int> _versesMarked = {};
   Timer? _pauseTimer;
 
+  // ── Playback speed ────────────────────────────────────────────────────────
+  double _playbackRate = 1.0;
+
+  // ── Translation toggle ────────────────────────────────────────────────────
+  bool _showTranslation = false;
+
+  // ── Safe Fail (long press révèle temporairement le texte masqué) ─────────
+  bool  _safeFailActive = false;
+  Timer? _safeFailTimer;
+
   // ── Animation ─────────────────────────────────────────────────────────────
   late AnimationController _phaseAnim;
 
@@ -89,6 +102,20 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
     return 'https://everyayah.com/data/${reciterOverride ?? _normalizedReciter}/$s$v.mp3';
   }
 
+  /// Pré-télécharge les [count] versets suivants pour réchauffer le cache navigateur.
+  void _prefetchAudio(int fromVerse, {int count = 5}) {
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 6),
+      receiveTimeout: const Duration(seconds: 10),
+    ));
+    for (var i = 1; i <= count; i++) {
+      final v = fromVerse + i;
+      if (v > widget.goal.totalVerses) break;
+      final url = _audioUrl(widget.goal.surahNumber, v);
+      dio.get(url).catchError((_) => Response(requestOptions: RequestOptions()));
+    }
+  }
+
   Future<void> _playVerseAudio(int surah, int verse) async {
     setState(() => _audioError = false);
     try {
@@ -96,11 +123,13 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
       // si l'état est PlayerState.completed, sinon la lecture échoue silencieusement.
       await _audioPlayer.stop();
       await _audioPlayer.play(UrlSource(_audioUrl(surah, verse)));
+      await _audioPlayer.setPlaybackRate(_playbackRate);
     } catch (_) {
       try {
         await _audioPlayer.play(
           UrlSource(_audioUrl(surah, verse, reciterOverride: 'Alafasy_128kbps')),
         );
+        await _audioPlayer.setPlaybackRate(_playbackRate);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -211,8 +240,14 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
 
     _resetTikrar();
 
+    // Dernier verset → dialogue de continuité MURAJA'A
+    if (_currentVerse >= widget.goal.totalVerses) {
+      Future.delayed(const Duration(milliseconds: 800), _showSessionCompleteDialog);
+      return;
+    }
+
     // Auto-avance si succès ou hésitation
-    if (score != ReviewScore.red && _currentVerse < widget.goal.totalVerses) {
+    if (score != ReviewScore.red) {
       Future.delayed(const Duration(milliseconds: 600), _nextVerse);
     }
   }
@@ -228,6 +263,11 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
+
+    // Pré-charger les 5 premiers versets dès l'ouverture de la session
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _prefetchAudio(_currentVerse, count: 5);
+    });
 
     _audioPlayer.onPlayerComplete.listen((_) {
       if (!mounted) return;
@@ -252,6 +292,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
   @override
   void dispose() {
     _pauseTimer?.cancel();
+    _safeFailTimer?.cancel();
     _phaseAnim.dispose();
     _audioPlayer.dispose();
     super.dispose();
@@ -324,6 +365,7 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
 
   Widget _buildSession(BuildContext context, Map<int, String> verseTexts) {
     final verseText = verseTexts[_currentVerse] ?? '…';
+    final translationAsync = ref.watch(quranTranslationProvider(widget.goal.surahNumber));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -333,6 +375,15 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          // Smart Toggle traduction
+          IconButton(
+            tooltip: _showTranslation ? 'Masquer la traduction' : 'Afficher la traduction',
+            icon: Icon(
+              _showTranslation ? Icons.translate : Icons.translate_outlined,
+              color: _showTranslation ? Colors.amber : Colors.white,
+            ),
+            onPressed: () => setState(() => _showTranslation = !_showTranslation),
+          ),
           // Mode toggle chip
           Padding(
             padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
@@ -407,7 +458,29 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
                         ),
                   ),
                   const SizedBox(height: 16),
-                  _buildMaskedVerseText(verseText),
+                  GestureDetector(
+                    onLongPress: _maskingLevel > 0 ? _onSafeFailLongPress : null,
+                    child: _buildMaskedVerseText(verseText, forceReveal: _safeFailActive),
+                  ),
+                  // Label Safe Fail
+                  if (_safeFailActive)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.touch_app, size: 13, color: AppColors.warning),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Maintien — texte révélé temporairement',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: AppColors.warning,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   // Label masquage courant
                   Row(
@@ -428,6 +501,10 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
                 ],
               ),
             ),
+
+            // ── Panneau traduction (Smart Toggle) ────────────────────────
+            if (_showTranslation)
+              _buildTranslationPanel(translationAsync),
 
             // ── Indicateur TIKRAR ou compteur Libre ──────────────────────
             if (_sessionMode == SessionMode.tikrar)
@@ -770,9 +847,21 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
     );
   }
 
-  Widget _buildMaskedVerseText(String verseText) {
+  Widget _buildMaskedVerseText(String verseText, {bool forceReveal = false}) {
     final words = verseText.split(' ');
-
+    // Safe Fail : afficher le texte complet temporairement (teinte orange)
+    if (forceReveal) {
+      return Text(
+        verseText,
+        textAlign: TextAlign.center,
+        style: GoogleFonts.amiri(
+          fontSize: 32,
+          fontWeight: FontWeight.w700,
+          color: AppColors.warning,
+        ),
+        textDirection: TextDirection.rtl,
+      );
+    }
     if (_maskingLevel == 0) {
       return Text(
         verseText,
@@ -842,70 +931,163 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
   }
 
   Widget _buildPlayerControls() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          // Bouton précédent
-          IconButton(
-            onPressed: _currentVerse > 1 ? _previousVerse : null,
-            icon: const Icon(Icons.skip_previous, size: 28),
-            color: AppColors.primary,
-          ),
-
-          // Bouton play (Libre: stepper loop; TIKRAR: juste play/pause)
-          if (_sessionMode == SessionMode.libre)
-            _buildControl(
-              '🔁',
-              '$_loopCount',
-              () => setState(() => _loopCount = (_loopCount - 1).clamp(1, 20)),
-              () => setState(() => _loopCount = (_loopCount + 1).clamp(1, 20)),
-            ),
-
-          GestureDetector(
-            onTap: _audioError ? null : _togglePlayPause,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: _audioError ? AppColors.danger : AppColors.primary,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+    return Column(
+      children: [
+        // ── Contrôle vitesse ──────────────────────────────────────────
+        _buildSpeedControl(),
+        const SizedBox(height: 8),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Bouton précédent
+              IconButton(
+                onPressed: _currentVerse > 1 ? _previousVerse : null,
+                icon: const Icon(Icons.skip_previous, size: 28),
+                color: AppColors.primary,
               ),
-              child: Center(
-                child: _audioError
-                    ? const Icon(Icons.wifi_off, color: Colors.white, size: 28)
-                    : Text(
-                        _isPlaying ? '⏸️' : '▶️',
-                        style: const TextStyle(fontSize: 32),
+
+              // Bouton play (Libre: stepper loop; TIKRAR: juste play/pause)
+              if (_sessionMode == SessionMode.libre)
+                _buildControl(
+                  '🔁',
+                  '$_loopCount',
+                  () => setState(() => _loopCount = (_loopCount - 1).clamp(1, 20)),
+                  () => setState(() => _loopCount = (_loopCount + 1).clamp(1, 20)),
+                ),
+
+              GestureDetector(
+                onTap: _audioError ? null : _togglePlayPause,
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: _audioError ? AppColors.danger : AppColors.primary,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _audioError
+                        ? const Icon(Icons.wifi_off, color: Colors.white, size: 28)
+                        : Text(
+                            _isPlaying ? '⏸️' : '▶️',
+                            style: const TextStyle(fontSize: 32),
+                          ),
+                  ),
+                ),
+              ),
+
+              if (_sessionMode == SessionMode.libre)
+                _buildControl(
+                  '⏱️',
+                  '${_pauseSeconds}s',
+                  () => setState(() => _pauseSeconds = (_pauseSeconds - 1).clamp(0, 60)),
+                  () => setState(() => _pauseSeconds = (_pauseSeconds + 1).clamp(0, 60)),
+                ),
+
+              // Bouton suivant
+              IconButton(
+                onPressed: _currentVerse < widget.goal.totalVerses ? _nextVerse : null,
+                icon: const Icon(Icons.skip_next, size: 28),
+                color: AppColors.primary,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSpeedControl() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.speed, size: 14, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        ...([0.75, 1.0, 1.25].map((rate) {
+          final isActive = _playbackRate == rate;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: GestureDetector(
+              onTap: () async {
+                setState(() => _playbackRate = rate);
+                if (_isPlaying) {
+                  await _audioPlayer.setPlaybackRate(rate);
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.primary : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isActive ? AppColors.primary : AppColors.divider,
+                  ),
+                ),
+                child: Text(
+                  '${rate}x',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? Colors.white : AppColors.textSecondary,
+                  ),
+                ),
               ),
             ),
-          ),
+          );
+        })),
+      ],
+    );
+  }
 
-          if (_sessionMode == SessionMode.libre)
-            _buildControl(
-              '⏱️',
-              '${_pauseSeconds}s',
-              () => setState(() => _pauseSeconds = (_pauseSeconds - 1).clamp(0, 60)),
-              () => setState(() => _pauseSeconds = (_pauseSeconds + 1).clamp(0, 60)),
-            ),
-
-          // Bouton suivant
-          IconButton(
-            onPressed: _currentVerse < widget.goal.totalVerses ? _nextVerse : null,
-            icon: const Icon(Icons.skip_next, size: 28),
-            color: AppColors.primary,
-          ),
-        ],
+  Widget _buildTranslationPanel(AsyncValue<Map<int, String>> translationAsync) {
+    return translationAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(8),
+        child: Center(child: SizedBox(
+          width: 20, height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        )),
       ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (translations) {
+        final text = translations[_currentVerse] ?? '';
+        if (text.isEmpty) return const SizedBox.shrink();
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.amber.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.amber.withOpacity(0.35)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('🇫🇷', style: TextStyle(fontSize: 14)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        height: 1.5,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1036,6 +1218,89 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
+  /// Safe Fail : révèle brièvement le texte sans invalider le cycle TIKRAR.
+  void _onSafeFailLongPress() {
+    HapticFeedback.mediumImpact();
+    _safeFailTimer?.cancel();
+    setState(() => _safeFailActive = true);
+    _safeFailTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _safeFailActive = false);
+    });
+  }
+
+  /// Dialogue de continuité après la fin de session.
+  Future<void> _showSessionCompleteDialog() async {
+    final count = _versesMarked.length;
+    if (!mounted || count == 0) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🎉', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 12),
+            Text(
+              'Session terminée !',
+              style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.primary,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tu as mémorisé $count verset${count > 1 ? 's' : ''} aujourd\'hui. '
+              'Veux-tu les consolider maintenant avec la MURAJA\'A SMART ?',
+              textAlign: TextAlign.center,
+              style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const HifzRevisionScreen()),
+                  );
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text(
+                  'Réviser maintenant (MURAJA\'A SMART)',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Terminer pour aujourd\'hui'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _togglePlayPause() async {
     if (_isPlaying) {
       _pauseTimer?.cancel();
@@ -1077,13 +1342,16 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
         duration: const Duration(seconds: 1),
       ),
     );
-    if (_currentVerse < widget.goal.totalVerses) {
+    if (_currentVerse >= widget.goal.totalVerses) {
+      Future.delayed(const Duration(milliseconds: 800), _showSessionCompleteDialog);
+    } else {
       Future.delayed(const Duration(milliseconds: 500), _nextVerse);
     }
   }
 
   Future<void> _nextVerse() async {
     if (_currentVerse < widget.goal.totalVerses) {
+      final wasPlaying = _isPlaying;
       await _stopAudio();
       setState(() {
         _currentVerse++;
@@ -1094,11 +1362,19 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
           _maskingLevel   = 0;
         }
       });
+      // Pré-charger les suivants depuis la nouvelle position
+      _prefetchAudio(_currentVerse, count: 5);
+      // Lecture auto si on était déjà en écoute
+      if (wasPlaying) {
+        setState(() => _isPlaying = true);
+        await _playVerseAudio(widget.goal.surahNumber, _currentVerse);
+      }
     }
   }
 
   Future<void> _previousVerse() async {
     if (_currentVerse > 1) {
+      final wasPlaying = _isPlaying;
       await _stopAudio();
       setState(() {
         _currentVerse--;
@@ -1109,6 +1385,10 @@ class _HifzSessionScreenState extends ConsumerState<HifzSessionScreen>
           _maskingLevel   = 0;
         }
       });
+      if (wasPlaying) {
+        setState(() => _isPlaying = true);
+        await _playVerseAudio(widget.goal.surahNumber, _currentVerse);
+      }
     }
   }
 }

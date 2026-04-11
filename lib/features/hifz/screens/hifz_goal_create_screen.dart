@@ -281,6 +281,10 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
         ? _versesPerDay
         : _calculateDailyTarget();
 
+    // Estimation : ~4 min par verset (TIKRAR 6446 complet)
+    final minutesPerDay = target * 4;
+    final totalVerses = _selectedSurahVerseCount;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -288,34 +292,69 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.primary.withOpacity(0.2)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Vous devez apprendre',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Objectif quotidien',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$target versets / jour',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                '$target versets par jour',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                    ),
-              ),
+              const Text('📖', style: TextStyle(fontSize: 40)),
             ],
           ),
-          Text(
-            '📖',
-            style: const TextStyle(fontSize: 40),
+          const SizedBox(height: 12),
+          // Détails : temps estimé + total versets
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _infoChip('⏱️', '≈ $minutesPerDay min/jour'),
+                Container(width: 1, height: 28, color: AppColors.divider),
+                _infoChip('📜', '$totalVerses versets au total'),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _infoChip(String emoji, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 16)),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      ],
     );
   }
 
@@ -407,12 +446,32 @@ class _HifzGoalCreateScreenState extends ConsumerState<HifzGoalCreateScreen> {
     );
   }
 
+  // Nombre exact de versets par sourate (indice 0 = sourate 1)
+  static const List<int> _surahVerseCounts = [
+    7, 286, 200, 176, 120, 165, 206, 75, 129, 109,
+    123, 111, 43, 52, 99, 128, 111, 110, 98, 135,
+    112, 78, 118, 64, 77, 227, 93, 88, 69, 60,
+    34, 30, 73, 54, 45, 83, 182, 88, 75, 85,
+    54, 53, 89, 59, 37, 35, 38, 29, 18, 45,
+    60, 49, 62, 55, 78, 96, 29, 22, 24, 13,
+    14, 11, 11, 18, 12, 12, 30, 52, 52, 44,
+    28, 28, 20, 56, 40, 31, 50, 40, 46, 42,
+    29, 19, 36, 25, 22, 17, 19, 26, 30, 20,
+    15, 21, 11, 8, 8, 19, 5, 8, 8, 11,
+    11, 8, 3, 9, 5, 4, 7, 3, 6, 3,
+    5, 4, 5, 6,
+  ];
+
+  int get _selectedSurahVerseCount =>
+      _surahVerseCounts.length >= _selectedSurah
+          ? _surahVerseCounts[_selectedSurah - 1]
+          : 30;
+
   int _calculateDailyTarget() {
     if (_targetDate == null) return 1;
     final daysRemaining = _targetDate!.difference(DateTime.now()).inDays;
     if (daysRemaining <= 0) return 1;
-    // Assuming average surah has 30 verses, adjust as needed
-    return (30 / daysRemaining).ceil();
+    return (_selectedSurahVerseCount / daysRemaining).ceil();
   }
 
   Future<void> _handleCreateGoal() async {

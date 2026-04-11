@@ -35,3 +35,22 @@ final quranVerseProvider =
   );
   return surahMap[params.verse] ?? '';
 });
+
+/// Fetches French translation for a surah (Hamidullah).
+/// Returns Map<verseNumber, frenchText> — cached by Riverpod per surahNumber.
+final quranTranslationProvider =
+    FutureProvider.family<Map<int, String>, int>((ref, surahNumber) async {
+  final dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 8),
+    receiveTimeout: const Duration(seconds: 12),
+  ));
+  final response = await dio.get(
+    'https://api.alquran.cloud/v1/surah/$surahNumber/fr.hamidullah',
+  );
+  final ayahs = response.data['data']['ayahs'] as List<dynamic>;
+  final map = <int, String>{};
+  for (final a in ayahs) {
+    map[a['numberInSurah'] as int] = (a['text'] as String).trim();
+  }
+  return map;
+});

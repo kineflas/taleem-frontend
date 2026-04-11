@@ -36,6 +36,19 @@ class HifzHubScreen extends ConsumerWidget {
                 child: _buildHeader(context, xpAsync),
               ),
 
+              // ── FOCUS MODE : tâche prioritaire ─────────────────────────
+              SliverToBoxAdapter(
+                child: Builder(builder: (ctx) {
+                  final goals = goalsAsync.valueOrNull ?? [];
+                  final dueVerses = dueVersesAsync.valueOrNull ?? [];
+                  final dueCount = dueVerses.where((v) {
+                    final next = DateTime.parse(v.nextReviewDate);
+                    return next.isBefore(DateTime.now().add(const Duration(days: 1)));
+                  }).length;
+                  return _buildFocusMode(ctx, ref, goals, dueCount);
+                }),
+              ),
+
               // Mes objectifs section
               SliverToBoxAdapter(
                 child: goalsAsync.when(
@@ -50,15 +63,6 @@ class HifzHubScreen extends ConsumerWidget {
                     ),
                   ),
                   data: (goals) => _buildGoalsSection(context, ref, goals),
-                ),
-              ),
-
-              // Révisions du jour section
-              SliverToBoxAdapter(
-                child: dueVersesAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (verses) => _buildRevisionSection(context, verses),
                 ),
               ),
 
@@ -173,6 +177,186 @@ class HifzHubScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Focus Mode ────────────────────────────────────────────────────────────
+
+  Widget _buildFocusMode(
+    BuildContext context,
+    WidgetRef ref,
+    List<HifzGoalModel> goals,
+    int dueCount,
+  ) {
+    // Cas 1 : des révisions sont dues → priorité absolue
+    if (dueCount > 0) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF6B35).withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HifzRevisionScreen()),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Text('🔁', style: TextStyle(fontSize: 36)),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tâche Prioritaire',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$dueCount verset${dueCount > 1 ? 's' : ''} à réviser',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Réviser maintenant →',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Cas 2 : pas de révisions → montrer l'objectif en cours le plus avancé
+    final activeGoal = goals
+        .where((g) => !g.isCompleted)
+        .fold<HifzGoalModel?>(null, (prev, g) {
+      if (prev == null) return g;
+      return g.versesMemorized > prev.versesMemorized ? g : prev;
+    });
+
+    if (activeGoal == null) return const SizedBox.shrink();
+
+    final surahNames = _getSurahNames();
+    final surahName = surahNames[activeGoal.surahNumber - 1]['ar']!;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primary.withOpacity(0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => HifzSessionScreen(goal: activeGoal)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                const Text('📖', style: TextStyle(fontSize: 36)),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Reprendre la session',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        surahName,
+                        style: GoogleFonts.amiri(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                        textDirection: TextDirection.rtl,
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: activeGoal.totalVerses > 0
+                              ? activeGoal.versesMemorized / activeGoal.totalVerses
+                              : 0,
+                          minHeight: 5,
+                          backgroundColor: Colors.white30,
+                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${activeGoal.versesMemorized}/${activeGoal.totalVerses} versets • Continuer →',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
