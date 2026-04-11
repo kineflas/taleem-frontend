@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/learning_models.dart';
+import '../data/quran_vocabulary_data.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 
@@ -15,53 +16,125 @@ class LearningApiService {
 
   LearningApiService(this._dio);
 
-  /// Fetch all words for a given module
+  // ── Vocabulary / Module words ──────────────────────────────────────────────
+
+  /// Fetch all words for a given module.
+  /// Tente l'API backend → fallback sur le dataset local.
   Future<List<LearningWord>> getModuleWords(int moduleNumber) async {
-    // TODO: wire to real endpoint when backend is ready
-    await Future.delayed(const Duration(milliseconds: 300));
-    return [];
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.studentLearnModules}/$moduleNumber/words',
+      );
+      final data = response.data as List<dynamic>;
+      if (data.isNotEmpty) {
+        return data
+            .map((j) => LearningWord.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+      }
+    } on DioException {
+      // Pas de backend encore — utiliser les données locales
+    }
+    // Fallback : dataset local
+    return _localWordsToLearningWords(wordsForModule(moduleNumber));
   }
 
-  /// Fetch due cards for today (Leitner box system)
+  List<LearningWord> _localWordsToLearningWords(List<QuranWord> words) {
+    return words.map((w) => LearningWord(
+      id: w.id.toString(),
+      arabicWord: w.arabicWord,
+      meaning: w.meaningFr,
+      transliteration: w.transliteration,
+      audioUrl: w.audioUrl,
+      moduleNumber: w.moduleNumber,
+      frequency: w.frequency,
+    )).toList();
+  }
+
+  // ── Leitner SRS (état local — backend non encore implémenté) ──────────────
+
+  /// Retourne les cards dues aujourd'hui selon le SRS local.
   Future<List<LeitnerCard>> getDueCards() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return [];
+    try {
+      final response = await _dio.get(ApiConstants.studentLearnSrsDue);
+      final data = response.data as List<dynamic>;
+      if (data.isNotEmpty) {
+        return data
+            .map((j) => LeitnerCard.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+      }
+    } on DioException {
+      // Pas de backend — retourner toutes les cards de la boite 1
+    }
+    // Fallback : toutes les words module 1 en box level 1 (nouvelles)
+    return wordsForModule(1).take(10).map((w) => LeitnerCard(
+      id: 'card_${w.id}',
+      wordId: w.id.toString(),
+      boxLevel: 1,
+      lastReviewedAt: DateTime.now().subtract(const Duration(days: 1)),
+      reviewCount: 0,
+      isCorrect: false,
+      nextReviewAt: DateTime.now(),
+    )).toList();
   }
 
-  /// Submit exercise result and update Leitner card
+  /// Soumet le résultat d'un exercice et met à jour la box Leitner.
   Future<void> submitExerciseResult(ExerciseResult result) async {
-    await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      await _dio.post(
+        '${ApiConstants.studentLearnModules}/${result.sessionId}/attempt',
+        data: result.toJson(),
+      );
+    } on DioException {
+      // Silently fail — état local géré côté widget
+    }
   }
 
-  /// Fetch module progress
+  // ── Module progress ────────────────────────────────────────────────────────
+
+  /// Fetch module progress, avec fallback zéro.
   Future<ModuleProgress> getModuleProgress(int moduleNumber) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return ModuleProgress(
-      moduleNumber: moduleNumber,
-      percentComplete: 0,
-      currentPhase: 0,
-      masteryLevel: 0,
-      masteredCount: 0,
-      totalCount: 50,
-      accuracy: 0,
-      leitnerDistribution: {},
-    );
+    try {
+      final response = await _dio.get(
+        '${ApiConstants.studentLearnModules}/$moduleNumber',
+      );
+      return ModuleProgress.fromJson(Map<String, dynamic>.from(response.data));
+    } on DioException {
+      // Calcul local : total = taille du dataset
+      final total = wordsForModule(moduleNumber).length;
+      return ModuleProgress(
+        moduleNumber: moduleNumber,
+        percentComplete: 0,
+        currentPhase: 1,
+        masteryLevel: 0,
+        masteredCount: 0,
+        totalCount: total > 0 ? total : 50,
+        accuracy: 0,
+        leitnerDistribution: {1: total, 2: 0, 3: 0, 4: 0, 5: 0},
+      );
+    }
   }
 
   /// Start a new learning session
   Future<LearningSession> startSession(int moduleNumber, int phase) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return LearningSession(
-      id: 'session_${DateTime.now().millisecondsSinceEpoch}',
-      studentId: 'student_1',
-      moduleNumber: moduleNumber,
-      phase: phase,
-      startedAt: DateTime.now(),
-      totalCards: 10,
-      correctAnswers: 0,
-      accuracy: 0,
-      cardIds: [],
-    );
+    try {
+      final response = await _dio.post(
+        ApiConstants.studentLearnModules,
+        data: {'module_number': moduleNumber, 'phase': phase},
+      );
+      return LearningSession.fromJson(Map<String, dynamic>.from(response.data));
+    } on DioException {
+      return LearningSession(
+        id: 'session_${DateTime.now().millisecondsSinceEpoch}',
+        studentId: 'student_1',
+        moduleNumber: moduleNumber,
+        phase: phase,
+        startedAt: DateTime.now(),
+        totalCards: wordsForModule(moduleNumber).length,
+        correctAnswers: 0,
+        accuracy: 0,
+        cardIds: [],
+      );
+    }
   }
 
   // ============ HIFZ MASTER API (real HTTP calls) ============
@@ -153,11 +226,28 @@ class LearningApiService {
   }
 }
 
-/// Provider: All words for a module
+/// Provider: All words for a module (API + fallback local)
 final wordsProvider = FutureProvider.family<List<LearningWord>, int>((ref, moduleNumber) async {
   final api = ref.watch(learningApiProvider);
   return api.getModuleWords(moduleNumber);
 });
+
+/// Provider synchrone : vocabulaire local du module (toujours disponible)
+final localWordsProvider = Provider.family<List<QuranWord>, int>((ref, moduleNumber) {
+  return wordsForModule(moduleNumber);
+});
+
+/// Provider : toutes les racines pour le module 4
+final localRootsProvider = Provider<List<ArabicRoot>>((ref) => kModule4Roots);
+
+/// Provider : tous les blocs sémantiques pour le module 3
+final localChunksProvider = Provider<List<QuranChunk>>((ref) => kModule3Chunks);
+
+/// Provider : versets du module 5
+final localVersesProvider = Provider<List<Map<String, dynamic>>>((ref) => kModule5Verses);
+
+/// Provider : mots du module 2 (particules spatiales)
+final localSpatialWordsProvider = Provider<List<QuranWord>>((ref) => kModule2Words);
 
 /// Provider: Due cards for Leitner review
 final dueCardsProvider = FutureProvider<List<LeitnerCard>>((ref) async {

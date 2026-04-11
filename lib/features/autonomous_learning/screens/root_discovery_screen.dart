@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../data/quran_vocabulary_data.dart';
 import '../providers/learning_provider.dart';
 
 /// Root Discovery screen (Module 4).
@@ -26,36 +27,33 @@ class _RootDiscoveryScreenState extends ConsumerState<RootDiscoveryScreen> {
   int _selectedMeaningIndex = -1;
   bool _answered = false;
 
-  final List<Map<String, dynamic>> _rootExamples = [
-    {
-      'root': 'ك-ت-ب',
-      'meaning': 'Écrire',
-      'derivations': [
-        {'word': 'كتاب', 'meaning': 'Livre'},
-        {'word': 'كاتب', 'meaning': 'Écrivain'},
-        {'word': 'مكتب', 'meaning': 'Bureau'},
-        {'word': 'كتب', 'meaning': 'Écrit'},
-      ],
-      'intruder': {'word': 'سفر', 'meaning': 'Voyager', 'root': 'س-ف-ر'},
-    },
-    {
-      'root': 'ع-ل-م',
-      'meaning': 'Savoir, Science',
-      'derivations': [
-        {'word': 'علم', 'meaning': 'Science, Drapeau'},
-        {'word': 'عالم', 'meaning': 'Savant'},
-        {'word': 'علامة', 'meaning': 'Signe'},
-        {'word': 'تعليم', 'meaning': 'Enseignement'},
-      ],
-      'intruder': {'word': 'نور', 'meaning': 'Lumière', 'root': 'ن-و-ر'},
-    },
-  ];
+  /// Données réelles du module 4 (racines arabes)
+  late final List<ArabicRoot> _rootExamples;
+
+  /// Conversion vers le format Map attendu par l'UI existante
+  List<Map<String, dynamic>> get _rootData =>
+      _rootExamples.map((r) {
+        // Mélanger dérivations + intrus pour l'exercice "Trouve l'intrus"
+        final allWords = [
+          ...r.derivations.map((d) => {'word': d.word, 'meaning': d.meaningFr, 'isIntruder': false}),
+          {'word': r.intruder.word, 'meaning': r.intruder.meaningFr, 'isIntruder': true},
+        ]..shuffle();
+        return {
+          'root': r.root,
+          'meaning': r.meaningFr,
+          'derivations': r.derivations.map((d) => {'word': d.word, 'meaning': d.meaningFr}).toList(),
+          'allWords': allWords,
+          'intruder': {'word': r.intruder.word, 'meaning': r.intruder.meaningFr, 'root': 'intrus'},
+        };
+      }).toList();
 
   late int _currentExampleIndex;
 
   @override
   void initState() {
     super.initState();
+    // Charger le dataset de racines réel depuis le provider
+    _rootExamples = ref.read(localRootsProvider).toList()..shuffle();
     _currentExampleIndex = 0;
   }
 
@@ -83,23 +81,25 @@ class _RootDiscoveryScreenState extends ConsumerState<RootDiscoveryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (widget.phase == 1)
-                    _TreePhase(example: _rootExamples[0])
+                  if (_rootData.isEmpty)
+                    const Center(child: Text('Aucune racine disponible.'))
+                  else if (widget.phase == 1)
+                    _TreePhase(example: _rootData[_currentExampleIndex % _rootData.length])
                   else if (widget.phase == 2)
                     _IntruderPhase(
-                      example: _rootExamples[0],
+                      example: _rootData[_currentExampleIndex % _rootData.length],
                       selectedIndex: _selectedIntruderIndex,
                       onSelect: (index) {
                         if (!_answered) {
                           setState(() => _selectedIntruderIndex = index);
-                          _checkIntruderAnswer(index, _rootExamples[0]);
+                          _checkIntruderAnswer(index, _rootData[_currentExampleIndex % _rootData.length]);
                         }
                       },
                       answered: _answered,
                     )
                   else
                     _GuessMeaningPhase(
-                      example: _rootExamples[1],
+                      example: _rootData[(_currentExampleIndex + 1) % _rootData.length],
                       selectedIndex: _selectedMeaningIndex,
                       onSelect: (index) {
                         if (!_answered) {
@@ -120,8 +120,8 @@ class _RootDiscoveryScreenState extends ConsumerState<RootDiscoveryScreen> {
   }
 
   void _checkIntruderAnswer(int index, Map<String, dynamic> example) {
-    final derivations = List<Map<String, dynamic>>.from(example['derivations']);
-    final isCorrect = index == derivations.length; // Intruder is last
+    final allWords = List<Map<String, dynamic>>.from(example['allWords'] as List? ?? []);
+    final isCorrect = allWords.isNotEmpty && (allWords[index]['isIntruder'] as bool? ?? false);
 
     setState(() => _answered = true);
 
@@ -327,30 +327,26 @@ class _IntruderPhase extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final derivations = List<Map<String, dynamic>>.from(example['derivations']);
-    final intruder = example['intruder'] as Map<String, dynamic>;
-
-    // Shuffle the order with intruder
-    final allWords = [...derivations, intruder];
-    allWords.shuffle();
+    // Utilise allWords pré-mélangé avec le flag isIntruder
+    final allWords = List<Map<String, dynamic>>.from(
+      (example['allWords'] as List?)?.cast<Map<String, dynamic>>() ??
+      [
+        ...List<Map<String, dynamic>>.from(example['derivations']),
+        example['intruder'] as Map<String, dynamic>,
+      ],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
+        const Text(
           '✋ Trouvez l\'intrus',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Text(
-          '3 mots partagent la racine ${example['root']}, 1 ne l\'a pas. Lequel est l\'intrus?',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppColors.textSecondary,
-          ),
+          '${allWords.length - 1} mots partagent la racine ${example['root']}, 1 ne l\'a pas. Lequel est l\'intrus?',
+          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 20),
 
@@ -358,7 +354,7 @@ class _IntruderPhase extends StatelessWidget {
         ...allWords.asMap().entries.map((entry) {
           final index = entry.key;
           final word = entry.value;
-          final isIntruder = word == intruder;
+          final isIntruder = word['isIntruder'] as bool? ?? false;
           final isSelected = selectedIndex == index;
           final revealed = answered && isSelected;
 
