@@ -139,30 +139,35 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/learn/flash-recall/:moduleNumber',
         builder: (ctx, state) => FlashRecallScreen(
           moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '1'),
+          phase: int.parse(state.uri.queryParameters['phase'] ?? '1'),
         ),
       ),
       GoRoute(
         path: '/learn/spatial-particles/:moduleNumber',
         builder: (ctx, state) => SpatialParticlesScreen(
           moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '2'),
+          phase: int.parse(state.uri.queryParameters['phase'] ?? '1'),
         ),
       ),
       GoRoute(
         path: '/learn/chunking/:moduleNumber',
         builder: (ctx, state) => ChunkingScreen(
           moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '3'),
+          phase: int.parse(state.uri.queryParameters['phase'] ?? '1'),
         ),
       ),
       GoRoute(
         path: '/learn/root-discovery/:moduleNumber',
         builder: (ctx, state) => RootDiscoveryScreen(
           moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '4'),
+          phase: int.parse(state.uri.queryParameters['phase'] ?? '1'),
         ),
       ),
       GoRoute(
         path: '/learn/verse-scan/:moduleNumber',
         builder: (ctx, state) => VerseScanScreen(
           moduleNumber: int.parse(state.pathParameters['moduleNumber'] ?? '5'),
+          phase: int.parse(state.uri.queryParameters['phase'] ?? '1'),
         ),
       ),
 
