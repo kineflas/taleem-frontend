@@ -8,6 +8,7 @@ import '../data/arabic_alphabet_data.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
 import '../widgets/alphabet_intro_card.dart';
+import 'letter_group_quiz_screen.dart';
 import 'letter_mastery_map_screen.dart';
 import 'letter_speed_round_screen.dart';
 
@@ -218,6 +219,10 @@ class CurriculumProgramScreen extends ConsumerWidget {
                         // Show group header when it's the first letter of a group
                         final isGroupStart = groupIdx >= 0 &&
                             letterGroups[groupIdx].first == glyph;
+                        // Show quiz banner after the last letter of an unlocked group
+                        final isGroupEnd = groupIdx >= 0 &&
+                            !isLocked &&
+                            letterGroups[groupIdx].last == glyph;
 
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,6 +242,14 @@ class CurriculumProgramScreen extends ConsumerWidget {
                               enrollmentId: enrollmentId,
                               isLocked: isLocked,
                             ),
+                            if (isGroupEnd) ...[
+                              const SizedBox(height: 10),
+                              _GroupQuizBanner(
+                                groupIdx: groupIdx,
+                                glyphs: letterGroups[groupIdx],
+                              ),
+                              const SizedBox(height: 4),
+                            ],
                           ],
                         );
                       },
@@ -514,6 +527,76 @@ class _UnitProgressTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Group quiz banner ────────────────────────────────────────────────────────
+class _GroupQuizBanner extends StatelessWidget {
+  final int groupIdx;
+  final List<String> glyphs;
+
+  const _GroupQuizBanner({
+    required this.groupIdx,
+    required this.glyphs,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => LetterGroupQuizScreen(
+            groupIndex: groupIdx,
+            glyphs: glyphs,
+          ),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppColors.accent.withOpacity(0.15), AppColors.primary.withOpacity(0.15)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.accent.withOpacity(0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.quiz_rounded, size: 18, color: AppColors.accent),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Quiz du groupe ${groupIdx + 1}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                  Text(
+                    'Révise les ${glyphs.length} lettres de ce groupe',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.accent),
+          ],
         ),
       ),
     );

@@ -1235,58 +1235,110 @@ class _PronunciationCard extends StatelessWidget {
 
 // ── Famille ───────────────────────────────────────────────────────────────────
 
-class _FamilyCard extends StatelessWidget {
+class _FamilyCard extends StatefulWidget {
   final LetterFamily family;
   final String currentGlyph;
   const _FamilyCard({required this.family, required this.currentGlyph});
+
+  @override
+  State<_FamilyCard> createState() => _FamilyCardState();
+}
+
+class _FamilyCardState extends State<_FamilyCard> {
+  final _audio = AudioPlayer();
+  String? _playingGlyph;
+
+  @override
+  void dispose() {
+    _audio.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playGlyph(String glyph) async {
+    await _audio.stop();
+    setState(() => _playingGlyph = glyph);
+    try {
+      final name = glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
+      await _audio.play(UrlSource('${ApiConstants.baseUrl}/static/audio/letters/$name.mp3'));
+      _audio.onPlayerComplete.listen((_) {
+        if (mounted) setState(() => _playingGlyph = null);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _playingGlyph = null);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: family.color.withOpacity(0.06),
+        color: widget.family.color.withOpacity(0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: family.color.withOpacity(0.3)),
+        border: Border.all(color: widget.family.color.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            family.descriptionFr,
-            style: TextStyle(
-              fontSize: 12,
-              color: family.color,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.family.descriptionFr,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: widget.family.color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(Icons.touch_app, size: 12, color: widget.family.color.withOpacity(0.5)),
+              const SizedBox(width: 4),
+              Text(
+                'Appuyez pour écouter',
+                style: TextStyle(fontSize: 10, color: widget.family.color.withOpacity(0.5)),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: family.letters.map((g) {
-              final isCurrent = g == currentGlyph;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isCurrent
-                      ? family.color.withOpacity(0.2)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isCurrent ? family.color : Colors.grey[200]!,
-                    width: isCurrent ? 2 : 1,
+            children: widget.family.letters.map((g) {
+              final isCurrent = g == widget.currentGlyph;
+              final isPlaying = _playingGlyph == g;
+              return GestureDetector(
+                onTap: () => _playGlyph(g),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isPlaying
+                        ? widget.family.color.withOpacity(0.3)
+                        : isCurrent
+                            ? widget.family.color.withOpacity(0.2)
+                            : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isCurrent || isPlaying ? widget.family.color : Colors.grey[200]!,
+                      width: isCurrent || isPlaying ? 2 : 1,
+                    ),
                   ),
-                ),
-                child: Text(
-                  g,
-                  style: TextStyle(
-                    fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
-                    fontSize: 28,
-                    color: isCurrent ? family.color : AppColors.primary,
-                    fontWeight:
-                        isCurrent ? FontWeight.w900 : FontWeight.normal,
+                  child: Column(
+                    children: [
+                      Text(
+                        g,
+                        style: TextStyle(
+                          fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                          fontSize: 28,
+                          color: isCurrent ? widget.family.color : AppColors.primary,
+                          fontWeight: isCurrent ? FontWeight.w900 : FontWeight.normal,
+                        ),
+                        textDirection: TextDirection.rtl,
+                      ),
+                      if (isPlaying)
+                        Icon(Icons.volume_up, size: 12, color: widget.family.color),
+                    ],
                   ),
-                  textDirection: TextDirection.rtl,
                 ),
               );
             }).toList(),
@@ -1667,8 +1719,8 @@ class _WordsContextSection extends StatelessWidget {
                       height: 1.6,
                     ),
                     children: [
-                      if (w.after.isNotEmpty)
-                        TextSpan(text: w.after, style: const TextStyle(color: Colors.black87)),
+                      if (w.before.isNotEmpty)
+                        TextSpan(text: w.before, style: const TextStyle(color: Colors.black87)),
                       TextSpan(
                         text: w.highlight,
                         style: const TextStyle(
@@ -1676,8 +1728,8 @@ class _WordsContextSection extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      if (w.before.isNotEmpty)
-                        TextSpan(text: w.before, style: const TextStyle(color: Colors.black87)),
+                      if (w.after.isNotEmpty)
+                        TextSpan(text: w.after, style: const TextStyle(color: Colors.black87)),
                     ],
                   ),
                 ),
@@ -1798,8 +1850,16 @@ class _AudioComparisonWidgetState extends State<_AudioComparisonWidget> {
     await _audio.stop();
     setState(() => _playing = which);
     try {
-      final name = which == 'A' ? widget.nameA : widget.nameB;
-      final url = '${ApiConstants.baseUrl}/static/audio/letters/${name.toLowerCase().replaceAll(' ', '_')}.mp3';
+      final String url;
+      if (which == 'A' && widget.audioUrlA != null) {
+        // Use the reliable unit audioUrl for the current letter
+        url = widget.audioUrlA!;
+      } else {
+        // Construct URL from glyph → name mapping (consistent with speed round)
+        final glyph = which == 'A' ? widget.glyphA : widget.glyphB;
+        final name = glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
+        url = '${ApiConstants.baseUrl}/static/audio/letters/$name.mp3';
+      }
       await _audio.play(UrlSource(url));
       _audio.onPlayerComplete.listen((_) {
         if (mounted) setState(() => _playing = null);
