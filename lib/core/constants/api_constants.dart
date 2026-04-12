@@ -58,6 +58,7 @@ class ApiConstants {
   static const String studentHifzGoals = '/student/hifz/goals';
   static const String studentHifzSessions = '/student/hifz/sessions';
   static const String studentHifzVersesDue = '/student/hifz/verses/due';
+  static const String studentHifzVersesAll  = '/student/hifz/verses';
   static const String studentHifzVersesReview = '/student/hifz/verses/review';
   static const String studentHifzXp = '/student/hifz/xp';
   static const String studentHifzReciters = '/student/hifz/reciters';

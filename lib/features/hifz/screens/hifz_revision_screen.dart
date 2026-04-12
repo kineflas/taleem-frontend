@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,6 +31,8 @@ class HifzRevisionScreen extends ConsumerStatefulWidget {
   ConsumerState<HifzRevisionScreen> createState() => _HifzRevisionScreenState();
 }
 
+enum _VoluntaryMode { none, recent, random }
+
 class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
   late int _currentIndex = 0;
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -38,10 +42,67 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
   // Cache des scores de la session en cours
   final Map<String, ReviewScore> _sessionScores = {};
 
+  // ── Révision volontaire ─────────────────────────────────────────────────────
+  _VoluntaryMode _voluntaryMode = _VoluntaryMode.none;
+  List<VerseProgressModel> _voluntaryVerses = [];
+  bool _loadingVoluntary = false;
+
   @override
   void dispose() {
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  // ── Révision volontaire ─────────────────────────────────────────────────────
+
+  Future<void> _launchVoluntary(_VoluntaryMode mode) async {
+    setState(() { _loadingVoluntary = true; });
+
+    final allVerses = await ref.read(hifzAllVersesProvider.future);
+
+    if (allVerses.isEmpty) {
+      if (mounted) {
+        setState(() { _loadingVoluntary = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aucun verset mémorisé pour l\'instant.'),
+            backgroundColor: AppColors.textSecondary,
+          ),
+        );
+      }
+      return;
+    }
+
+    List<VerseProgressModel> selection;
+    if (mode == _VoluntaryMode.recent) {
+      // Trier par reviewCount croissant (moins de révisions = plus récent)
+      // puis prendre les 15 derniers (on inverse le tri pour les "derniers ajoutés")
+      final sorted = [...allVerses]..sort((a, b) => a.reviewCount.compareTo(b.reviewCount));
+      selection = sorted.take(min(15, sorted.length)).toList();
+    } else {
+      // Mode aléatoire — mélange et prend jusqu'à 20 versets
+      final shuffled = [...allVerses]..shuffle(Random());
+      selection = shuffled.take(min(20, shuffled.length)).toList();
+    }
+
+    if (mounted) {
+      setState(() {
+        _voluntaryMode  = mode;
+        _voluntaryVerses = selection;
+        _currentIndex   = 0;
+        _sessionScores.clear();
+        _loadingVoluntary = false;
+      });
+    }
+  }
+
+  void _exitVoluntary() {
+    setState(() {
+      _voluntaryMode   = _VoluntaryMode.none;
+      _voluntaryVerses = [];
+      _currentIndex    = 0;
+      _sessionScores.clear();
+    });
   }
 
   String _audioUrl(int surah, int verse) {
@@ -147,6 +208,11 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
   @override
   Widget build(BuildContext context) {
     final dueVersesAsync = ref.watch(hifzDueVersesProvider);
+
+    // ── Mode révision volontaire actif ──────────────────────────────────────
+    if (_voluntaryMode != _VoluntaryMode.none && _voluntaryVerses.isNotEmpty) {
+      return _buildVoluntarySession(context);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -277,40 +343,199 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
     );
   }
 
+  // ── Empty state — propose la révision volontaire ────────────────────────────
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Text('🎉', style: TextStyle(fontSize: 64)),
-          const SizedBox(height: 16),
+          // ── Badge succès ─────────────────────────────────────────────────
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.success.withOpacity(0.35), width: 2),
+            ),
+            child: const Center(
+              child: Text('🎉', style: TextStyle(fontSize: 40)),
+            ),
+          ),
+          const SizedBox(height: 18),
           Text(
-            'Aucune révision requise !',
-            style: Theme.of(context).textTheme.titleLarge,
+            'Vous êtes à jour !',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primary,
+                ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            'Bravo, vous êtes à jour !',
+            'Toutes vos révisions programmées sont complètes.\nRevenez demain pour la prochaine session.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textSecondary,
+                  height: 1.5,
                 ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 36),
+
+          // ── Divider avec label ───────────────────────────────────────────
+          Row(
+            children: [
+              const Expanded(child: Divider()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'Révision volontaire',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                ),
+              ),
+              const Expanded(child: Divider()),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ── Tuile : Derniers versets appris ──────────────────────────────
+          _VoluntaryTile(
+            emoji: '📖',
+            title: 'Derniers versets appris',
+            subtitle: 'Les 15 versets les plus récemment mémorisés',
+            color: AppColors.primary,
+            loading: _loadingVoluntary && _voluntaryMode == _VoluntaryMode.recent,
+            onTap: _loadingVoluntary ? null : () => _launchVoluntary(_VoluntaryMode.recent),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Tuile : Révision aléatoire ────────────────────────────────────
+          _VoluntaryTile(
+            emoji: '🎲',
+            title: 'Révision aléatoire',
+            subtitle: 'Sélection surprise parmi tous tes versets mémorisés',
+            color: AppColors.accent,
+            loading: _loadingVoluntary && _voluntaryMode == _VoluntaryMode.random,
+            onTap: _loadingVoluntary ? null : () => _launchVoluntary(_VoluntaryMode.random),
+          ),
+          const SizedBox(height: 32),
+
+          // ── Info spacing SRS ─────────────────────────────────────────────
           Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.success.withOpacity(0.3)),
+              color: AppColors.primary.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.primary.withOpacity(0.12)),
             ),
-            child: Text(
-              'Revenez demain pour la prochaine session de révision espacée.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.success,
-                    fontStyle: FontStyle.italic,
+            child: Row(
+              children: [
+                const Text('💡', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'La révision volontaire n\'affecte pas le calendrier SRS. Elle renforce la mémorisation sans perturber les intervalles programmés.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.primary,
+                          fontStyle: FontStyle.italic,
+                          height: 1.4,
+                        ),
                   ),
-              textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Session de révision volontaire ───────────────────────────────────────────
+  Widget _buildVoluntarySession(BuildContext context) {
+    final modeLabel = _voluntaryMode == _VoluntaryMode.recent
+        ? 'Derniers versets appris'
+        : 'Révision aléatoire';
+    final modeEmoji = _voluntaryMode == _VoluntaryMode.recent ? '📖' : '🎲';
+    final modeColor = _voluntaryMode == _VoluntaryMode.recent
+        ? AppColors.primary
+        : AppColors.accent;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: Text('Murājaʿa — $modeLabel'),
+        elevation: 0,
+        backgroundColor: modeColor,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _exitVoluntary,
+        ),
+      ),
+      body: Column(
+        children: [
+          // ── Bandeau mode volontaire ─────────────────────────────────────
+          Container(
+            color: modeColor.withOpacity(0.08),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(modeEmoji, style: const TextStyle(fontSize: 14)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Révision volontaire — ${_currentIndex + 1} / ${_voluntaryVerses.length}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: modeColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+                GestureDetector(
+                  onTap: _exitVoluntary,
+                  child: Text(
+                    'Quitter',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: modeColor,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Barre de progression ────────────────────────────────────────
+          ClipRRect(
+            child: LinearProgressIndicator(
+              value: (_currentIndex + 1) / _voluntaryVerses.length,
+              minHeight: 4,
+              backgroundColor: AppColors.heatmapEmpty,
+              valueColor: AlwaysStoppedAnimation<Color>(modeColor),
+            ),
+          ),
+
+          // ── PageView des versets ────────────────────────────────────────
+          Expanded(
+            child: PageView.builder(
+              onPageChanged: (i) => setState(() => _currentIndex = i),
+              itemCount: _voluntaryVerses.length,
+              itemBuilder: (context, idx) => _buildVerseCard(
+                context,
+                ref,
+                idx,
+                _voluntaryVerses[idx],
+              ),
             ),
           ),
         ],
@@ -722,6 +947,9 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
 
   // ── Handler principal ─────────────────────────────────────────────────────
 
+
+  /// En mode volontaire, le score est enregistré dans le cache session mais
+  /// n'impacte PAS le planning SRS (pas d'appel API review).
   void _handleReview(VerseProgressModel verse, ReviewScore score) {
     // Enregistrer le score dans le cache session
     setState(() => _sessionScores[verse.id] = score);
@@ -743,11 +971,109 @@ class _HifzRevisionScreenState extends ConsumerState<HifzRevisionScreen> {
       duration: const Duration(seconds: 2),
     ));
 
-    // TODO: API call — enregistrer le score en base
-    // ref.read(learningApiProvider).recordVerseReview(
-    //   verseId: verse.id,
-    //   score: score.name.toUpperCase(),
-    //   nextReviewDays: reviewIntervals[score]!,
-    // );
+    // En mode SRS normal : appel API pour persister le score
+    // En mode volontaire : pas d'appel API (ne perturbe pas le planning)
+    if (_voluntaryMode == _VoluntaryMode.none) {
+      // TODO: API call
+      // ref.read(learningApiProvider).recordVerseReview(
+      //   verseId: verse.id,
+      //   score: score.name.toUpperCase(),
+      //   nextReviewDays: reviewIntervals[score]!,
+      // );
+    }
+  }
+}
+
+// ── Tuile de révision volontaire ──────────────────────────────────────────────
+class _VoluntaryTile extends StatelessWidget {
+  final String emoji;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  const _VoluntaryTile({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedOpacity(
+        opacity: onTap == null ? 0.5 : 1.0,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: loading
+                    ? Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: color,
+                        ),
+                      )
+                    : Center(
+                        child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                      ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.3,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.5), size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -189,6 +189,17 @@ class LearningApiService {
     }
   }
 
+  /// Tous les versets mémorisés de l'étudiant (indépendamment de la date de révision)
+  Future<List<VerseProgressModel>> fetchAllVerses() async {
+    try {
+      final response = await _dio.get(ApiConstants.studentHifzVersesAll);
+      final data = response.data as List<dynamic>;
+      return data.map((j) => VerseProgressModel.fromJson(Map<String, dynamic>.from(j))).toList();
+    } on DioException {
+      return [];
+    }
+  }
+
   Future<StudentXPModel> fetchStudentXP() async {
     try {
       final response = await _dio.get(ApiConstants.studentHifzXp);

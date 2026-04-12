@@ -22,6 +22,11 @@ final hifzDueVersesProvider = FutureProvider<List<VerseProgressModel>>((ref) {
   return ref.read(learningApiProvider).fetchDueVerses();
 });
 
+/// Tous les versets mémorisés — pour révision volontaire (derniers appris / aléatoire)
+final hifzAllVersesProvider = FutureProvider<List<VerseProgressModel>>((ref) {
+  return ref.read(learningApiProvider).fetchAllVerses();
+});
+
 /// Get student XP, level, and badges
 final hifzStudentXPProvider = FutureProvider<StudentXPModel>((ref) {
   return ref.read(learningApiProvider).fetchStudentXP();
