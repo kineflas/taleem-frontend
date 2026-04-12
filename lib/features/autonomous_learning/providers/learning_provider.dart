@@ -109,7 +109,7 @@ class LearningApiService {
         masteredCount: 0,
         totalCount: total > 0 ? total : 50,
         accuracy: 0,
-        leitnerDistribution: {1: total, 2: 0, 3: 0, 4: 0, 5: 0},
+        leitnerDistribution: {'1': total, '2': 0, '3': 0, '4': 0, '5': 0},
       );
     }
   }
