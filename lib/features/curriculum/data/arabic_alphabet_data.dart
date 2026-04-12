@@ -258,7 +258,7 @@ const Map<String, LetterPronunciation> letterPronunciations = {
   'ث': LetterPronunciation(
     letterName: 'Tha',
     difficulty: PronunciationDifficulty.medium,
-    categoryFr: 'Interdentale',
+    categoryFr: 'Langue entre les dents',
     equivalentFr: 'Comme le TH anglais de « Think »',
     equivalentLanguage: 'anglais',
     descriptionFr:
@@ -274,7 +274,7 @@ const Map<String, LetterPronunciation> letterPronunciations = {
   'ج': LetterPronunciation(
     letterName: 'Jim',
     difficulty: PronunciationDifficulty.easy,
-    categoryFr: 'Chuintante',
+    categoryFr: 'Son DJ',
     equivalentFr: 'Comme DJ dans « Djebel »',
     descriptionFr:
         'Proche du DJ de « Django », « Adjoint ». Bien marquer le D '
@@ -335,7 +335,7 @@ const Map<String, LetterPronunciation> letterPronunciations = {
   'ذ': LetterPronunciation(
     letterName: 'Dhal',
     difficulty: PronunciationDifficulty.medium,
-    categoryFr: 'Interdentale',
+    categoryFr: 'Langue entre les dents',
     equivalentFr: 'Comme le TH anglais de « This »',
     equivalentLanguage: 'anglais',
     descriptionFr:
@@ -370,7 +370,7 @@ const Map<String, LetterPronunciation> letterPronunciations = {
   'ز': LetterPronunciation(
     letterName: 'Zay',
     difficulty: PronunciationDifficulty.easy,
-    categoryFr: 'Sifflante',
+    categoryFr: 'Son Z',
     equivalentFr: 'Comme le Z français',
     descriptionFr:
         'Identique au Z de « Zèbre », « Zoo ». Aucune difficulté.',
@@ -379,7 +379,7 @@ const Map<String, LetterPronunciation> letterPronunciations = {
   'س': LetterPronunciation(
     letterName: 'Sin',
     difficulty: PronunciationDifficulty.easy,
-    categoryFr: 'Sifflante',
+    categoryFr: 'Son S',
     equivalentFr: 'Comme le S français',
     descriptionFr:
         'Identique au S de « Soleil », « Serpent ». Un S sourd et léger.',
@@ -389,7 +389,7 @@ const Map<String, LetterPronunciation> letterPronunciations = {
   'ش': LetterPronunciation(
     letterName: 'Shin',
     difficulty: PronunciationDifficulty.easy,
-    categoryFr: 'Chuintante',
+    categoryFr: 'Son CH',
     equivalentFr: 'Comme le CH français',
     descriptionFr:
         'Identique au CH de « Chat », « Chien ». Aucune difficulté.',

@@ -10,6 +10,7 @@ import '../../../core/constants/app_colors.dart';
 import '../data/arabic_alphabet_data.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
+import '../widgets/mouth_diagram_widget.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LetterPageScreen — parcours lettre unifié en 3 phases
@@ -377,7 +378,7 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
           if (pronunciation != null) ...[
             _SectionHeader(label: 'Prononciation'),
             const SizedBox(height: 10),
-            _PronunciationCard(pronunciation: pronunciation),
+            _PronunciationCard(pronunciation: pronunciation, glyph: glyph),
             const SizedBox(height: 20),
           ],
 
@@ -997,7 +998,8 @@ class _FourFormsGrid extends StatelessWidget {
 
 class _PronunciationCard extends StatelessWidget {
   final LetterPronunciation pronunciation;
-  const _PronunciationCard({required this.pronunciation});
+  final String glyph;
+  const _PronunciationCard({required this.pronunciation, required this.glyph});
 
   Color _difficultyColor(PronunciationDifficulty d) {
     switch (d) {
@@ -1086,6 +1088,28 @@ class _PronunciationCard extends StatelessWidget {
             pronunciation.descriptionFr,
             style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.textSecondary),
           ),
+
+          // Schéma d'articulation (seulement pour les sons sans équivalent français)
+          Builder(builder: (_) {
+            final zones = zonesForGlyph(glyph);
+            if (zones.isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 14),
+                const Text(
+                  'Position dans la bouche',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                MouthDiagramWidget(zones: zones, showLegend: true),
+              ],
+            );
+          }),
 
           // Astuce
           if (pronunciation.astuceFr != null) ...[
