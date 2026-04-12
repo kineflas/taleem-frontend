@@ -677,51 +677,6 @@ class _HifzHubScreenState extends ConsumerState<HifzHubScreen> {
       ),
     );
   }
-}
-
-// ── Bouton action compact dans la GoalCard ────────────────────────────────────
-class _GoalActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _GoalActionButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.25)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 15, color: color),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // ── Heatmap activité journalière ──────────────────────────────────────────
 
@@ -763,10 +718,10 @@ class _GoalActionButton extends StatelessWidget {
                 year: now.year,
                 month: now.month,
                 onDayTap: (day) {
-                  if (day.completedTasks > 0) {
+                  if (day.completedCount > 0) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(
-                        '${day.completedTasks} tâche${day.completedTasks > 1 ? 's' : ''} '
+                        '${day.completedCount} tâche${day.completedCount > 1 ? 's' : ''} '
                         'le ${day.date.day}/${day.date.month}',
                       ),
                       duration: const Duration(seconds: 2),
@@ -793,7 +748,7 @@ class _GoalActionButton extends StatelessWidget {
         day.date.year == d.year &&
         day.date.month == d.month &&
         day.date.day == d.day &&
-        day.completedTasks > 0,
+        day.completedCount > 0,
       );
       if (match.isEmpty) break;
       streak++;
@@ -1108,5 +1063,50 @@ class _GoalActionButton extends StatelessWidget {
       default:
         return badgeType;
     }
+  }
+}
+
+// ── Bouton action compact dans la GoalCard ────────────────────────────────────
+class _GoalActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _GoalActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
