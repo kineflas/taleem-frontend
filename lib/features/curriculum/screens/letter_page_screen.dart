@@ -11,6 +11,8 @@ import '../data/arabic_alphabet_data.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
 import '../widgets/mouth_diagram_widget.dart';
+import 'letter_speed_round_screen.dart';
+import 'letter_mastery_map_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LetterPageScreen — parcours lettre unifié en 3 phases
@@ -112,6 +114,23 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
         .toList();
 
     final questions = <_QuizQuestion>[];
+
+    // ── Q0 : Audio-first — Écoute avant de voir le glyph ─────────────
+    if (widget.unit.audioUrl != null) {
+      final distractors = allLetterNames
+          .where((n) => n != letterName)
+          .toList()
+        ..shuffle(rng);
+      final choices = [letterName, ...distractors.take(3)]..shuffle(rng);
+      questions.add(_QuizQuestion(
+        type: _QType.soundToName,
+        questionFr: '🎧 Écoute attentivement — quelle lettre as-tu entendu ?',
+        displayGlyph: null,
+        correctAnswer: letterName,
+        choices: choices,
+        itemAudioUrl: widget.unit.audioUrl,
+      ));
+    }
 
     // ── Q1 : Glyph → Nom (lettre affichée, choisir son nom) ─────────────
     {
@@ -382,11 +401,39 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
             const SizedBox(height: 20),
           ],
 
+          // ── Comparaison audio (si paire confusable) ───────────────────
+          if (pronunciation?.paireGlyph != null) ...[
+            const SizedBox(height: 10),
+            _AudioComparisonWidget(
+              glyphA: glyph,
+              glyphB: pronunciation!.paireGlyph!,
+              nameA: letterName,
+              nameB: glyphToName[pronunciation.paireGlyph!] ?? pronunciation.paireGlyph!,
+              audioUrlA: widget.unit.audioUrl,
+            ),
+          ],
+
           // ── Famille ───────────────────────────────────────────────────
           if (family != null) ...[
             _SectionHeader(label: 'Famille de lettres'),
             const SizedBox(height: 10),
             _FamilyCard(family: family, currentGlyph: glyph),
+            const SizedBox(height: 20),
+          ],
+
+          // ── Mots en contexte ──────────────────────────────────────────
+          final words = letterWordExamples[glyph] ?? [];
+          if (words.isNotEmpty) ...[
+            _SectionHeader(label: 'Ce son dans des mots'),
+            const SizedBox(height: 10),
+            _WordsContextSection(words: words),
+            const SizedBox(height: 20),
+          ],
+
+          // ── Mnémotechnique ────────────────────────────────────────────
+          final mnemonic = letterMnemonics[glyph];
+          if (mnemonic != null) ...[
+            _MnemonicCard(mnemonic: mnemonic),
             const SizedBox(height: 20),
           ],
 
@@ -761,6 +808,32 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
                       style: TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
+                if (_earnedStars == 3) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 52,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.deepPurple, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => LetterSpeedRoundScreen(
+                              glyphsToReview: [widget.unit.titleAr],
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.bolt, color: Colors.deepPurple),
+                      label: const Text(
+                        '⚡ Mode Vitesse',
+                        style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
         ],
@@ -1558,6 +1631,263 @@ class _StarRow extends StatelessWidget {
           ),
         );
       }),
+    );
+  }
+}
+
+// ── Mots en contexte ────────────────────────────────────────────────────────
+
+class _WordsContextSection extends StatelessWidget {
+  final List<WordExample> words;
+  const _WordsContextSection({required this.words});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: words.map((w) {
+        return Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Column(
+              children: [
+                // Arabic word with highlighted letter
+                RichText(
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                      fontSize: 22,
+                      height: 1.6,
+                    ),
+                    children: [
+                      if (w.after.isNotEmpty)
+                        TextSpan(text: w.after, style: const TextStyle(color: Colors.black87)),
+                      TextSpan(
+                        text: w.highlight,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (w.before.isNotEmpty)
+                        TextSpan(text: w.before, style: const TextStyle(color: Colors.black87)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  w.translitFr,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.textSecondary,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  w.meaningFr,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ── Mnémotechnique ────────────────────────────────────────────────────────────
+
+class _MnemonicCard extends StatelessWidget {
+  final LetterMnemonic mnemonic;
+  const _MnemonicCard({required this.mnemonic});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.deepPurple.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🧠 ', style: TextStyle(fontSize: 16)),
+              const Text(
+                'Astuce mémoire',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.deepPurple,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            mnemonic.hookFr,
+            style: const TextStyle(fontSize: 13, height: 1.5),
+          ),
+          if (mnemonic.imageFr != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '💭 ${mnemonic.imageFr}',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.deepPurple.withOpacity(0.7),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Comparaison audio paires confusables ──────────────────────────────────────
+
+class _AudioComparisonWidget extends StatefulWidget {
+  final String glyphA;
+  final String glyphB;
+  final String nameA;
+  final String nameB;
+  final String? audioUrlA;
+
+  const _AudioComparisonWidget({
+    required this.glyphA,
+    required this.glyphB,
+    required this.nameA,
+    required this.nameB,
+    this.audioUrlA,
+  });
+
+  @override
+  State<_AudioComparisonWidget> createState() => _AudioComparisonWidgetState();
+}
+
+class _AudioComparisonWidgetState extends State<_AudioComparisonWidget> {
+  final _audio = AudioPlayer();
+  String? _playing; // 'A' or 'B'
+
+  @override
+  void dispose() {
+    _audio.dispose();
+    super.dispose();
+  }
+
+  Future<void> _play(String which) async {
+    await _audio.stop();
+    setState(() => _playing = which);
+    try {
+      final name = which == 'A' ? widget.nameA : widget.nameB;
+      final url = '${ApiConstants.baseUrl}/static/audio/letters/${name.toLowerCase().replaceAll(' ', '_')}.mp3';
+      await _audio.play(UrlSource(url));
+      _audio.onPlayerComplete.listen((_) {
+        if (mounted) setState(() => _playing = null);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _playing = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '👂 Distinguer ces deux sons',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Colors.orange,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _buildPlayBtn('A', widget.glyphA, widget.nameA)),
+              const SizedBox(width: 8),
+              const Text('↔', style: TextStyle(fontSize: 18, color: Colors.grey)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildPlayBtn('B', widget.glyphB, widget.nameB)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayBtn(String which, String glyph, String name) {
+    final isPlaying = _playing == which;
+    return GestureDetector(
+      onTap: () => _play(which),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: isPlaying ? Colors.orange.withOpacity(0.15) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isPlaying ? Colors.orange : AppColors.divider,
+            width: isPlaying ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isPlaying ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+              size: 20,
+              color: Colors.orange,
+            ),
+            const SizedBox(width: 6),
+            Column(
+              children: [
+                Text(
+                  glyph,
+                  style: TextStyle(
+                    fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+                Text(
+                  name,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
