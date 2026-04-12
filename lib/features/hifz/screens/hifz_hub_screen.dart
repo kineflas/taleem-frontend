@@ -8,9 +8,13 @@ import '../../autonomous_learning/models/learning_models.dart';
 import '../providers/hifz_provider.dart';
 import '../../shared/widgets/streak_badge.dart';
 import '../widgets/hifz_tour.dart';
+import '../../shared/widgets/heatmap_widget.dart';
+import '../../shared/models/task_model.dart';
+import '../../student/providers/student_provider.dart';
 import 'hifz_goal_create_screen.dart';
 import 'hifz_session_screen.dart';
 import 'hifz_revision_screen.dart';
+import 'surah_heatmap_screen.dart';
 
 class HifzHubScreen extends ConsumerStatefulWidget {
   const HifzHubScreen({super.key});
@@ -146,6 +150,11 @@ class _HifzHubScreenState extends ConsumerState<HifzHubScreen> {
                   error: (_, __) => const SizedBox.shrink(),
                   data: (xp) => _buildBadgesSection(context, xp),
                 ),
+              ),
+
+              // ── Heatmap activité journalière ────────────────────────
+              SliverToBoxAdapter(
+                child: _buildActivityHeatmap(context),
               ),
 
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -452,11 +461,45 @@ class _HifzHubScreenState extends ConsumerState<HifzHubScreen> {
         Padding(
           key: _goalsKey,
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Text(
-            'Mes objectifs',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Mes objectifs',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              // ── Bouton Révisions — toujours visible ─────────────────
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HifzRevisionScreen()),
                 ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.accent.withOpacity(0.35)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded, size: 14, color: AppColors.accent),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Réviser',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         if (goals.isEmpty)
@@ -591,8 +634,194 @@ class _HifzHubScreenState extends ConsumerState<HifzHubScreen> {
                   ),
               ],
             ),
+            const SizedBox(height: 12),
+            // ── Actions rapides ─────────────────────────────────────────
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                // Bouton Continuer
+                Expanded(
+                  child: _GoalActionButton(
+                    icon: Icons.play_arrow_rounded,
+                    label: goal.isCompleted ? 'Relire' : 'Continuer',
+                    color: AppColors.primary,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => HifzSessionScreen(goal: goal),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Bouton Heatmap
+                Expanded(
+                  child: _GoalActionButton(
+                    icon: Icons.grid_view_rounded,
+                    label: 'Heatmap',
+                    color: AppColors.accent,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => SurahHeatmapScreen(
+                          surahNumber: goal.surahNumber,
+                          surahName: surahName['ar']!,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Bouton action compact dans la GoalCard ────────────────────────────────────
+class _GoalActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _GoalActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Heatmap activité journalière ──────────────────────────────────────────
+
+  Widget _buildActivityHeatmap(BuildContext context) {
+    final now = DateTime.now();
+    final heatmapAsync = ref.watch(
+      heatmapProvider((year: now.year, month: now.month)),
+    );
+
+    return heatmapAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (days) {
+        if (days.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'Activité du mois',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const Spacer(),
+                  // Streak résumé rapide
+                  _buildStreakPill(days),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: HeatmapWidget(
+                days: days,
+                year: now.year,
+                month: now.month,
+                onDayTap: (day) {
+                  if (day.completedTasks > 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(
+                        '${day.completedTasks} tâche${day.completedTasks > 1 ? 's' : ''} '
+                        'le ${day.date.day}/${day.date.month}',
+                      ),
+                      duration: const Duration(seconds: 2),
+                      backgroundColor: AppColors.primary,
+                    ));
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStreakPill(List<HeatmapDay> days) {
+    // Calcule le streak courant depuis aujourd'hui en remontant
+    final today = DateTime.now();
+    int streak = 0;
+    for (int i = 0; i < 365; i++) {
+      final d = today.subtract(Duration(days: i));
+      final match = days.where((day) =>
+        day.date.year == d.year &&
+        day.date.month == d.month &&
+        day.date.day == d.day &&
+        day.completedTasks > 0,
+      );
+      if (match.isEmpty) break;
+      streak++;
+    }
+
+    if (streak == 0) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.accent.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.accent.withOpacity(0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 13)),
+          const SizedBox(width: 4),
+          Text(
+            '$streak jour${streak > 1 ? 's' : ''}',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: AppColors.accent,
+            ),
+          ),
+        ],
       ),
     );
   }
