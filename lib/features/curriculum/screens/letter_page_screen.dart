@@ -364,6 +364,8 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
         .toList();
     final familyIdx = glyphToFamilyIndex[glyph];
     final family = familyIdx != null ? letterFamilies[familyIdx] : null;
+    final words = letterWordExamples[glyph] ?? [];
+    final mnemonic = letterMnemonics[glyph];
 
     return SingleChildScrollView(
       key: const ValueKey('discovery'),
@@ -422,7 +424,6 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
           ],
 
           // ── Mots en contexte ──────────────────────────────────────────
-          final words = letterWordExamples[glyph] ?? [];
           if (words.isNotEmpty) ...[
             _SectionHeader(label: 'Ce son dans des mots'),
             const SizedBox(height: 10),
@@ -431,7 +432,6 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
           ],
 
           // ── Mnémotechnique ────────────────────────────────────────────
-          final mnemonic = letterMnemonics[glyph];
           if (mnemonic != null) ...[
             _MnemonicCard(mnemonic: mnemonic),
             const SizedBox(height: 20),

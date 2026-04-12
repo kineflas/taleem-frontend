@@ -51,9 +51,11 @@ class _LetterSpeedRoundScreenState extends State<LetterSpeedRoundScreen>
   @override
   void initState() {
     super.initState();
-    _glyphs = widget.glyphsToReview.isNotEmpty
-        ? [...widget.glyphsToReview]..shuffle(_rng)
-        : [...glyphToName.keys.toList()]..shuffle(_rng);
+    _glyphs = List<String>.from(
+      widget.glyphsToReview.isNotEmpty
+          ? widget.glyphsToReview
+          : glyphToName.keys.toList(),
+    )..shuffle(_rng);
 
     _timerCtrl = AnimationController(
       vsync: this,
