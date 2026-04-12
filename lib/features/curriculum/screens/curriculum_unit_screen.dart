@@ -6,16 +6,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_colors.dart';
+import '../data/arabic_alphabet_data.dart';
 import '../models/curriculum_model.dart';
 import '../providers/curriculum_provider.dart';
-import '../widgets/letter_forms_preview.dart';
-import '../widgets/letter_family_chip.dart';
-import '../widgets/letter_pronunciation_card.dart';
-import '../widgets/letter_quiz_widget.dart';
+import 'letter_page_screen.dart';
 
 /// Screen listing all items in a unit with completion badges.
-/// For Alphabet units: shows letter overview (description, audio, 4 forms preview,
-/// family chip) before the items list.
+/// For LETTER units (Option A): shows one card per letter → LetterPageScreen.
+/// For other units: shows items list with completion badges.
 /// Route: /student/curriculum/:enrollmentId/unit/:unitId
 class CurriculumUnitScreen extends ConsumerStatefulWidget {
   final String enrollmentId;
@@ -60,21 +58,27 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
     }
   }
 
-  void _showQuiz(
-      BuildContext context, QuizMode mode, List<CurriculumItem> items) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => LetterQuizWidget(
-        mode: mode,
-        items: items,
-        onComplete: () {},
+  /// Navigue vers LetterPageScreen et récupère le score (étoiles) au retour
+  Future<void> _openLetterPage(
+    BuildContext context,
+    CurriculumUnit unit,
+    int existingStars,
+  ) async {
+    final result = await Navigator.of(context).push<int>(
+      MaterialPageRoute(
+        builder: (_) => LetterPageScreen(
+          enrollmentId: widget.enrollmentId,
+          unit: unit,
+          existingStars: existingStars,
+        ),
       ),
     );
+    // Rafraîchir la progression si un score a été retourné
+    if (result != null && result > 0) {
+      ref.invalidate(enrollmentProgressProvider(widget.enrollmentId));
+      // Recharger aussi les détails de l'unité parente
+      ref.invalidate(curriculumUnitDetailProvider(widget.unitId));
+    }
   }
 
   @override
@@ -98,13 +102,49 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
           }
         }
 
-        final isAlphabetLetter = unit.unitType == 'LETTER';
-        final letterItems = isAlphabetLetter
-            ? unit.items
-                .where((i) => i.letterPosition != null)
-                .toList()
-            : <CurriculumItem>[];
+        final isLetterUnit = unit.unitType == 'LETTER';
 
+        // ── Option A : unité de type LETTER ─────────────────────────────
+        // Une seule carte cliquable par lettre → LetterPageScreen
+        if (isLetterUnit) {
+          // Calculer le score (étoiles) depuis le premier item de la lettre
+          final firstItem = unit.items.isNotEmpty ? unit.items.first : null;
+          final prog = firstItem != null ? progressMap[firstItem.id] : null;
+          final existingStars = prog?.masteryLevel ?? 0;
+
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(unit.titleFr ?? unit.titleAr,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(
+                    unit.titleAr,
+                    style: TextStyle(
+                        fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                        fontSize: 14,
+                        color: Colors.white70),
+                    textDirection: TextDirection.rtl,
+                  ),
+                ],
+              ),
+            ),
+            body: Center(
+              child: _LetterEntryCard(
+                unit: unit,
+                stars: existingStars,
+                onTap: () => _openLetterPage(context, unit, existingStars),
+              ),
+            ),
+          );
+        }
+
+        // ── Unités non-lettre (règles, vocab, grammaire, Hifz…) ──────────
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
@@ -114,13 +154,12 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(unit.titleFr ?? unit.titleAr,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold)),
                 Text(
                   unit.titleAr,
                   style: TextStyle(
-                      fontFamily:
-                          GoogleFonts.scheherazadeNew().fontFamily,
+                      fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                       fontSize: 14,
                       color: Colors.white70),
                   textDirection: TextDirection.rtl,
@@ -128,7 +167,6 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
               ],
             ),
             actions: [
-              // Audio play button in app bar
               if (unit.audioUrl != null)
                 IconButton(
                   icon: Icon(
@@ -145,60 +183,8 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Letter overview (Alphabet only) ──────────────
-                if (isAlphabetLetter) ...[
-                  // Big letter + audio button
-                  _LetterHeroCard(
-                    glyph: unit.titleAr,
-                    audioUrl: unit.audioUrl,
-                    isPlaying: _isPlaying,
-                    onPlay: unit.audioUrl != null
-                        ? () => _playAudio(unit.audioUrl!)
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Description
-                  if (unit.descriptionFr != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: AppColors.primary.withOpacity(0.15)),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.lightbulb_outline,
-                              color: AppColors.accent, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              unit.descriptionFr!,
-                              style: TextStyle(
-                                  fontSize: 14, height: 1.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Pronunciation guide
-                  LetterPronunciationCard(glyph: unit.titleAr),
-
-                  // 4 forms preview
-                  if (letterItems.length == 4)
-                    LetterFormsPreview(items: letterItems),
-
-                  // Letter family
-                  LetterFamilyChip(currentGlyph: unit.titleAr),
-                ],
-
-                // ── Non-alphabet description card ─────────────────
-                if (!isAlphabetLetter && unit.descriptionFr != null)
+                // Description
+                if (unit.descriptionFr != null)
                   Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.all(14),
@@ -210,26 +196,11 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
                     ),
                     child: Text(
                       unit.descriptionFr!,
-                      style: TextStyle(fontSize: 14, height: 1.5),
+                      style: const TextStyle(fontSize: 14, height: 1.5),
                     ),
                   ),
 
-                // ── Section title ─────────────────────────────────
-                if (isAlphabetLetter) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(
-                      'Apprendre chaque position',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                ],
-
-                // ── Items list ────────────────────────────────────
+                // Items list
                 ...unit.items.map((item) {
                   final prog = progressMap[item.id];
                   final isCompleted = prog?.isCompleted ?? false;
@@ -242,43 +213,10 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
                       teacherValidated: prog?.teacherValidated ?? false,
                       onTap: () => context.push(
                           '/student/curriculum/${widget.enrollmentId}/item/${item.id}'),
-                      onQuiz: isCompleted && isAlphabetLetter
-                          ? () => _showQuiz(
-                              context, QuizMode.position, [item])
-                          : null,
+                      onQuiz: null,
                     ),
                   );
                 }),
-
-                // ── Letter quiz (all positions completed) ─────────
-                if (isAlphabetLetter &&
-                    letterItems.isNotEmpty &&
-                    letterItems.every(
-                        (i) => progressMap[i.id]?.isCompleted ?? false)) ...[
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () =>
-                          _showQuiz(context, QuizMode.letter, letterItems),
-                      icon: const Icon(Icons.quiz, color: Colors.white),
-                      label: Text(
-                        'Quiz de la lettre',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
 
                 const SizedBox(height: 32),
               ],
@@ -290,82 +228,132 @@ class _CurriculumUnitScreenState extends ConsumerState<CurriculumUnitScreen> {
   }
 }
 
-// ── Letter hero card with big glyph + audio ─────────────────────────────────
+// ── Carte d'entrée lettre (Option A) ─────────────────────────────────────────
 
-class _LetterHeroCard extends StatelessWidget {
-  final String glyph;
-  final String? audioUrl;
-  final bool isPlaying;
-  final VoidCallback? onPlay;
+class _LetterEntryCard extends StatelessWidget {
+  final CurriculumUnit unit;
+  final int stars; // 0-3
+  final VoidCallback onTap;
 
-  const _LetterHeroCard({
-    required this.glyph,
-    this.audioUrl,
-    required this.isPlaying,
-    this.onPlay,
+  const _LetterEntryCard({
+    required this.unit,
+    required this.stars,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withOpacity(0.08),
-            AppColors.primary.withOpacity(0.02),
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withOpacity(0.15)),
-      ),
+    final glyph = unit.titleAr;
+    final letterName = glyphToName[glyph] ?? unit.titleFr ?? glyph;
+    final passed = stars > 0;
+
+    return Padding(
+      padding: const EdgeInsets.all(32),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Big glyph
-          Directionality(
-            textDirection: TextDirection.rtl,
-            child: Text(
-              glyph,
-              style: TextStyle(
-                fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
-                fontSize: 72,
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary,
-                height: 1.2,
+          // ── Hero glyph ────────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 40),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withOpacity(0.10),
+                  AppColors.primary.withOpacity(0.02),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  glyph,
+                  style: TextStyle(
+                    fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
+                    fontSize: 96,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                    height: 1.1,
+                  ),
+                  textDirection: TextDirection.rtl,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  letterName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+                if (stars > 0) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      3,
+                      (i) => Icon(
+                        i < stars ? Icons.star : Icons.star_border,
+                        color: i < stars ? Colors.amber : Colors.grey[300],
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Bouton principal ──────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: passed ? AppColors.accent : AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: onTap,
+              icon: Icon(
+                passed ? Icons.star_outlined : Icons.school_outlined,
+                color: Colors.white,
+              ),
+              label: Text(
+                passed ? 'Améliorer mon score' : 'Apprendre cette lettre',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          // Audio button
-          if (onPlay != null)
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    isPlaying ? AppColors.accent : AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 28, vertical: 12),
+
+          if (passed) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Lettre validée ✅ — Vise ${stars < 3 ? "${stars + 1} étoile${stars + 1 > 1 ? 's' : ''}" : "la perfection !"}',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
               ),
-              onPressed: onPlay,
-              icon: Icon(isPlaying ? Icons.stop : Icons.volume_up, size: 20),
-              label: Text(
-                isPlaying ? 'Arrêter' : 'Écouter la prononciation',
-                style: TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600),
-              ),
+              textAlign: TextAlign.center,
             ),
+          ],
         ],
       ),
     );
   }
 }
 
-// ── Item tile (reused from before) ──────────────────────────────────────────
+// ── Item tile (unités non-lettre : règles, vocab, grammaire…) ────────────────
 
 class _ItemTile extends StatelessWidget {
   final CurriculumItem item;
@@ -373,7 +361,7 @@ class _ItemTile extends StatelessWidget {
   final int? masteryLevel;
   final bool teacherValidated;
   final VoidCallback onTap;
-  final VoidCallback? onQuiz;
+  final VoidCallback? onQuiz; // conservé pour compatibilité, inutilisé pour les lettres
 
   const _ItemTile({
     required this.item,
@@ -488,7 +476,8 @@ class _ItemTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     _MasteryDots(level: masteryLevel!),
                   ],
-                  if (onQuiz != null) ...[
+                  // onQuiz supprimé — les lettres utilisent LetterPageScreen
+                  if (false && onQuiz != null) ...[
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: onQuiz,
