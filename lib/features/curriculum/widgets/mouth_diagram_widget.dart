@@ -46,17 +46,24 @@ enum ArticulationZone {
 }
 
 // ── Cartes phonétiques dédiées par glyphe ─────────────────────────────────
-// 10 cartes générées (coupe sagittale, lettre + légende intégrées)
+// 12 cartes Banana AI (coupe sagittale haute qualité) + 3 anciennes cartes
 const Map<String, String> _glyphToCard = {
-  'ث': 'assets/images/articulation/phon_tha.png',
-  'ذ': 'assets/images/articulation/phon_dhal.png',
-  'ر': 'assets/images/articulation/phon_ra.png',
+  // ── Banana AI (gemini/) ──
+  'ث': 'assets/images/gemini/phon_tha.png',
+  'ذ': 'assets/images/gemini/phon_dhal.png',
+  'ر': 'assets/images/gemini/phon_ra.png',
+  'خ': 'assets/images/gemini/phon_kha.png',
+  'ح': 'assets/images/gemini/phon_hha.png',
+  'ع': 'assets/images/gemini/phon_ayn.png',
+  'ق': 'assets/images/gemini/phon_qaf.png',
+  'ص': 'assets/images/gemini/phon_saad.png',
+  'ض': 'assets/images/gemini/phon_daad.png',
+  'ط': 'assets/images/gemini/phon_taa.png',
+  'ظ': 'assets/images/gemini/phon_thaa.png',
+  'ه': 'assets/images/gemini/phon_ha.png',
+  // ── Anciennes cartes (articulation/) ──
   'ج': 'assets/images/articulation/phon_jim.png',
-  'خ': 'assets/images/articulation/phon_kha.png',
   'غ': 'assets/images/articulation/phon_ghayn.png',
-  'ق': 'assets/images/articulation/phon_qaf.png',
-  'ح': 'assets/images/articulation/phon_hha.png',
-  'ع': 'assets/images/articulation/phon_ayn.png',
   'ء': 'assets/images/articulation/phon_hamza.png',
 };
 
