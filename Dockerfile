@@ -1,5 +1,5 @@
 # ─── Stage 1: Build Flutter Web ─────────────────────────────────────────────
-FROM ghcr.io/cirruslabs/flutter:3.29.3 AS builder
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
 
 WORKDIR /app
 COPY . .
@@ -10,7 +10,8 @@ COPY . .
 ARG API_BASE_URL=http://localhost:8000
 
 RUN flutter pub get
-RUN dart run build_runner build --delete-conflicting-outputs
+# build_runner skipped — generated .g.dart/.freezed.dart files are committed
+# RUN dart run build_runner build --delete-conflicting-outputs
 RUN flutter build web --release --no-tree-shake-icons --no-wasm-dry-run \
     --dart-define=API_BASE_URL=${API_BASE_URL}
 
