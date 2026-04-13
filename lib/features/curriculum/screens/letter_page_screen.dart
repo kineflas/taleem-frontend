@@ -1365,10 +1365,11 @@ class _PronunciationCard extends StatelessWidget {
             style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.textSecondary),
           ),
 
-          // Schéma d'articulation (seulement pour les sons sans équivalent français)
+          // Schéma d'articulation (carte phonétique ou schéma générique par zone)
           Builder(builder: (_) {
+            final hasCard = hasPhoneticCard(glyph);
             final zones = zonesForGlyph(glyph);
-            if (zones.isEmpty) return const SizedBox.shrink();
+            if (!hasCard && zones.isEmpty) return const SizedBox.shrink();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1382,7 +1383,11 @@ class _PronunciationCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                MouthDiagramWidget(zones: zones, showLegend: true),
+                MouthDiagramWidget(
+                  glyph: glyph,
+                  zones: zones,
+                  showLegend: !hasCard,
+                ),
               ],
             );
           }),

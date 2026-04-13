@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // MouthDiagramWidget — Schéma d'articulation (vue sagittale)
 //
-// Affiche une image PNG pré-générée montrant la position de la langue et de
-// la bouche pour chaque zone d'articulation des lettres arabes.
+// Affiche une carte phonétique pré-générée (PNG 800×500) montrant la position
+// de la langue et de la bouche pour chaque lettre arabe phonétiquement
+// complexe. Pour les autres lettres, affiche un schéma de zone générique.
 //
 // Usage :
-//   MouthDiagramWidget(zones: [ArticulationZone.pharyngeal])
+//   MouthDiagramWidget(glyph: 'ح')                 // carte dédiée
+//   MouthDiagramWidget(zones: [ArticulationZone.palatal]) // zone générique
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Point d'articulation : où le son est produit dans la bouche/gorge
@@ -43,9 +45,24 @@ enum ArticulationZone {
   emphatic,
 }
 
-/// Métadonnées d'affichage par zone
+// ── Cartes phonétiques dédiées par glyphe ─────────────────────────────────
+// 10 cartes générées (coupe sagittale, lettre + légende intégrées)
+const Map<String, String> _glyphToCard = {
+  'ث': 'assets/images/articulation/phon_tha.png',
+  'ذ': 'assets/images/articulation/phon_dhal.png',
+  'ر': 'assets/images/articulation/phon_ra.png',
+  'ج': 'assets/images/articulation/phon_jim.png',
+  'خ': 'assets/images/articulation/phon_kha.png',
+  'غ': 'assets/images/articulation/phon_ghayn.png',
+  'ق': 'assets/images/articulation/phon_qaf.png',
+  'ح': 'assets/images/articulation/phon_hha.png',
+  'ع': 'assets/images/articulation/phon_ayn.png',
+  'ء': 'assets/images/articulation/phon_hamza.png',
+};
+
+/// Métadonnées d'affichage par zone (pour le fallback)
 class _ZoneMeta {
-  final String asset;   // chemin relatif assets/
+  final String asset;
   final String labelFr;
   final Color color;
 
@@ -68,37 +85,37 @@ const Map<ArticulationZone, _ZoneMeta> _zoneMeta = {
     color: Color(0xFFFF5722),
   ),
   ArticulationZone.interdental: _ZoneMeta(
-    asset: 'assets/images/articulation/interdental.png',
+    asset: 'assets/images/articulation/phon_tha.png',
     labelFr: 'Langue entre les dents',
     color: Color(0xFFFF9800),
   ),
   ArticulationZone.alveolar: _ZoneMeta(
-    asset: 'assets/images/articulation/alveolar.png',
+    asset: 'assets/images/articulation/phon_ra.png',
     labelFr: 'Derrière des dents',
     color: Color(0xFFFFC107),
   ),
   ArticulationZone.palatal: _ZoneMeta(
-    asset: 'assets/images/articulation/palatal.png',
+    asset: 'assets/images/articulation/phon_jim.png',
     labelFr: 'Milieu du palais',
     color: Color(0xFF4CAF50),
   ),
   ArticulationZone.velar: _ZoneMeta(
-    asset: 'assets/images/articulation/velar.png',
+    asset: 'assets/images/articulation/phon_kha.png',
     labelFr: 'Voile du palais',
     color: Color(0xFF00BCD4),
   ),
   ArticulationZone.uvular: _ZoneMeta(
-    asset: 'assets/images/articulation/uvular.png',
+    asset: 'assets/images/articulation/phon_qaf.png',
     labelFr: 'Luette',
     color: Color(0xFF3F51B5),
   ),
   ArticulationZone.pharyngeal: _ZoneMeta(
-    asset: 'assets/images/articulation/pharyngeal.png',
+    asset: 'assets/images/articulation/phon_hha.png',
     labelFr: 'Fond de gorge',
     color: Color(0xFF9C27B0),
   ),
   ArticulationZone.glottal: _ZoneMeta(
-    asset: 'assets/images/articulation/glottal.png',
+    asset: 'assets/images/articulation/phon_hamza.png',
     labelFr: 'Glotte',
     color: Color(0xFF607D8B),
   ),
@@ -109,32 +126,44 @@ const Map<ArticulationZone, _ZoneMeta> _zoneMeta = {
   ),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 class MouthDiagramWidget extends StatelessWidget {
-  /// Zones à afficher. Si plusieurs zones sont actives, une carte par zone.
+  /// Glyphe arabe de la lettre courante (ex. 'ح').
+  /// Si une carte dédiée existe, elle sera affichée en priorité.
+  final String? glyph;
+
+  /// Zones à afficher (fallback quand pas de carte dédiée).
   final List<ArticulationZone> zones;
 
-  /// Si true, affiche la légende en dessous.
+  /// Si true, affiche la légende en dessous (uniquement pour le mode zone).
   final bool showLegend;
 
   const MouthDiagramWidget({
     super.key,
-    required this.zones,
+    this.glyph,
+    this.zones = const [],
     this.showLegend = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    // ── Priorité 1 : carte phonétique dédiée ────────────────────────────
+    final cardAsset = glyph != null ? _glyphToCard[glyph!] : null;
+    if (cardAsset != null) {
+      return _PhoneticCard(asset: cardAsset);
+    }
+
+    // ── Priorité 2 : schéma générique par zone ──────────────────────────
     if (zones.isEmpty) return const SizedBox.shrink();
 
-    // Si plusieurs zones (ex. ظ = emphatic + interdental), afficher en tabs
-    // ou empiler verticalement. On affiche la première zone + badge pour les autres.
     final primary = zones.first;
-    final meta = _zoneMeta[primary]!;
+    final meta = _zoneMeta[primary];
+    if (meta == null) return const SizedBox.shrink();
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Diagramme principal ────────────────────────────────────────────
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: Image.asset(
@@ -144,75 +173,98 @@ class MouthDiagramWidget extends StatelessWidget {
           ),
         ),
 
-        // ── Zones supplémentaires (badges) ────────────────────────────────
+        // Zones supplémentaires (badges)
         if (zones.length > 1) ...[
           const SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Aussi : ', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              const Text('Aussi : ',
+                  style: TextStyle(fontSize: 11, color: Colors.grey)),
               ...zones.skip(1).map((z) {
-                final m = _zoneMeta[z]!;
+                final m = _zoneMeta[z];
+                if (m == null) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(left: 4),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: m.color.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: m.color.withOpacity(0.5)),
-                    ),
-                    child: Text(
-                      m.labelFr,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: m.color,
-                      ),
-                    ),
-                  ),
+                  child: _ZoneBadge(label: m.labelFr, color: m.color),
                 );
               }),
             ],
           ),
         ],
 
-        // ── Légende zone principale ────────────────────────────────────────
+        // Légende zone principale
         if (showLegend) ...[
           const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: meta.color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: meta.color.withOpacity(0.4)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 9, height: 9,
-                  decoration: BoxDecoration(color: meta.color, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  meta.labelFr,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: meta.color,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _ZoneBadge(label: meta.labelFr, color: meta.color, large: true),
         ],
       ],
     );
   }
 }
 
-/// Fallback si l'image ne charge pas (dev local sans assets)
+// ── Carte phonétique complète (800×500) ───────────────────────────────────────
+
+class _PhoneticCard extends StatelessWidget {
+  final String asset;
+  const _PhoneticCard({required this.asset});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Image.asset(
+        asset,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const _FallbackDiagram(),
+      ),
+    );
+  }
+}
+
+// ── Badge de zone ─────────────────────────────────────────────────────────────
+
+class _ZoneBadge extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool large;
+  const _ZoneBadge({required this.label, required this.color, this.large = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: large ? 12 : 8, vertical: large ? 5 : 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: large ? 9 : 7,
+            height: large ? 9 : 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: large ? 11 : 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Fallback ──────────────────────────────────────────────────────────────────
+
 class _FallbackDiagram extends StatelessWidget {
   const _FallbackDiagram();
 
@@ -234,39 +286,45 @@ class _FallbackDiagram extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mapping glyph → zones d'articulation (inchangé)
+// Mapping glyph → zones d'articulation
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Retourne les zones d'articulation associées à un glyphe.
 List<ArticulationZone> zonesForGlyph(String glyph) {
   return _glyphZones[glyph] ?? [];
 }
 
+/// Retourne true si une carte phonétique dédiée existe pour ce glyphe.
+bool hasPhoneticCard(String glyph) => _glyphToCard.containsKey(glyph);
+
 const Map<String, List<ArticulationZone>> _glyphZones = {
-  'ب': [],
-  'م': [],
+  'ب': [ArticulationZone.lips],
+  'م': [ArticulationZone.lips],
   'و': [ArticulationZone.lips],
   'ف': [ArticulationZone.labiodental],
   'ث': [ArticulationZone.interdental],
   'ذ': [ArticulationZone.interdental],
-  'ت': [],
-  'د': [],
-  'ن': [],
-  'ل': [],
+  'ت': [ArticulationZone.alveolar],
+  'د': [ArticulationZone.alveolar],
+  'ن': [ArticulationZone.alveolar],
+  'ل': [ArticulationZone.alveolar],
   'ر': [ArticulationZone.alveolar],
-  'س': [],
-  'ز': [],
-  'ش': [],
+  'س': [ArticulationZone.alveolar],
+  'ز': [ArticulationZone.alveolar],
+  'ش': [ArticulationZone.palatal],
   'ج': [ArticulationZone.palatal],
-  'ك': [],
-  'خ': [ArticulationZone.uvular],
-  'غ': [ArticulationZone.uvular],
+  'ك': [ArticulationZone.velar],
+  'خ': [ArticulationZone.velar],
+  'غ': [ArticulationZone.velar],
   'ق': [ArticulationZone.uvular],
   'ح': [ArticulationZone.pharyngeal],
   'ع': [ArticulationZone.pharyngeal],
   'ء': [ArticulationZone.glottal],
   'ه': [ArticulationZone.glottal],
-  'ص': [ArticulationZone.emphatic],
-  'ض': [ArticulationZone.emphatic],
-  'ط': [ArticulationZone.emphatic],
+  'ص': [ArticulationZone.emphatic, ArticulationZone.alveolar],
+  'ض': [ArticulationZone.emphatic, ArticulationZone.alveolar],
+  'ط': [ArticulationZone.emphatic, ArticulationZone.alveolar],
   'ظ': [ArticulationZone.emphatic, ArticulationZone.interdental],
+  'ا': [],
+  'ي': [ArticulationZone.palatal],
 };
