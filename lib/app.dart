@@ -15,7 +15,7 @@ class TaliemApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
 
-    final app = MaterialApp.router(
+    return MaterialApp.router(
       title: 'Taliem',
       theme: AppTheme.light,
       routerConfig: router,
@@ -30,17 +30,15 @@ class TaliemApp extends ConsumerWidget {
         Locale('ar', 'SA'),
       ],
       locale: const Locale('fr', 'FR'),
+      builder: (context, child) {
+        // On web: layer version-update banner + offline overlay
+        if (kIsWeb) {
+          return VersionUpdateBanner(
+            child: WebOfflineOverlay(child: child ?? const SizedBox.shrink()),
+          );
+        }
+        return child ?? const SizedBox.shrink();
+      },
     );
-
-    // On web: layer version-update banner + offline overlay
-    if (kIsWeb) {
-      return ProviderScope(
-        child: VersionUpdateBanner(
-          child: WebOfflineOverlay(child: app),
-        ),
-      );
-    }
-
-    return app;
   }
 }
