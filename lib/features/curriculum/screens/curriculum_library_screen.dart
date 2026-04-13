@@ -134,6 +134,7 @@ class CurriculumLibraryScreen extends ConsumerWidget {
               try {
                 final enrollment = await ref.read(curriculumApiProvider).enroll(program.id);
                 ref.invalidate(myEnrollmentsProvider);
+                ref.invalidate(enrollmentProgressProvider(enrollment.id));
                 if (context.mounted) {
                   context.push('/student/curriculum/${enrollment.id}');
                 }
