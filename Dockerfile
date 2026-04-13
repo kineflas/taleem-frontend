@@ -13,6 +13,7 @@ RUN flutter pub get
 # build_runner skipped — generated .g.dart/.freezed.dart files are committed
 # RUN dart run build_runner build --delete-conflicting-outputs
 RUN flutter build web --release --no-tree-shake-icons --no-wasm-dry-run \
+    --pwa-strategy=none \
     --dart-define=API_BASE_URL=${API_BASE_URL}
 
 # ── Generate version.json ────────────────────────────────────────────────────
