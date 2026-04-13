@@ -109,9 +109,11 @@ class CurriculumLibraryScreen extends ConsumerWidget {
 
   void _showEnrollDialog(
       BuildContext context, WidgetRef ref, CurriculumProgram program) {
+    // Capture the page-level navigator so it survives dialog dismissal.
+    final pageContext = context;
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(program.titleFr),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -124,23 +126,23 @@ class CurriculumLibraryScreen extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Annuler'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext); // close dialog
               try {
                 final enrollment = await ref.read(curriculumApiProvider).enroll(program.id);
                 ref.invalidate(myEnrollmentsProvider);
                 ref.invalidate(enrollmentProgressProvider(enrollment.id));
-                if (context.mounted) {
-                  context.push('/student/curriculum/${enrollment.id}');
+                if (pageContext.mounted) {
+                  pageContext.push('/student/curriculum/${enrollment.id}');
                 }
               } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                if (pageContext.mounted) {
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
                     SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.danger),
                   );
                 }
