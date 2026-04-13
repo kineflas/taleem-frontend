@@ -99,9 +99,9 @@ class _LetterSpeedRoundScreenState extends State<LetterSpeedRoundScreen>
   }
 
   Future<void> _playAudio(String glyph) async {
-    final name = glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
+    final filename = glyphToAudioFilename[glyph] ?? glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
     try {
-      await _audio.play(UrlSource('${ApiConstants.baseUrl}/static/audio/letters/$name.mp3'));
+      await _audio.play(UrlSource('${ApiConstants.baseUrl}/static/audio/letters/$filename.mp3'));
     } catch (_) {}
   }
 

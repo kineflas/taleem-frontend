@@ -188,6 +188,41 @@ const Map<String, String> glyphToName = {
 /// All 28 letter names for quiz answer generation
 final List<String> allLetterNames = glyphToName.values.toSet().toList();
 
+// ── Glyph → exact audio filename (without .mp3) ──────────────────────────────
+// Filenames verified against /static/audio/letters/ on the backend.
+// Use this map everywhere instead of deriving from glyphToName.
+
+const Map<String, String> glyphToAudioFilename = {
+  'ا': 'alif',
+  'ب': 'ba',
+  'ت': 'taa',
+  'ث': 'tha',
+  'ج': 'jiim',
+  'ح': 'hha',   // distinct from ه (ha)
+  'خ': 'kha',
+  'د': 'daal',
+  'ذ': 'thaal',
+  'ر': 'ra',
+  'ز': 'zay',
+  'س': 'siin',
+  'ش': 'shiin',
+  'ص': 'saad',
+  'ض': 'daad',
+  'ط': 'ta',     // emphatic T — file is 'ta.mp3'
+  'ظ': 'thaa',   // emphatic Dh — file is 'thaa.mp3'
+  'ع': 'ayn',
+  'غ': 'ghayn',
+  'ف': 'fa',
+  'ق': 'qaf',
+  'ك': 'kaf',
+  'ل': 'lam',
+  'م': 'miim',
+  'ن': 'nuun',
+  'ه': 'ha',
+  'و': 'waw',
+  'ي': 'ya',
+};
+
 // ── Pronunciation guide ────────────────────────────────────────────────────
 
 enum PronunciationDifficulty { easy, medium, hard, expert }

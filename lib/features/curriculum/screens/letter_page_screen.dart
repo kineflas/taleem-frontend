@@ -165,26 +165,52 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
       ));
     }
 
-    // ── Q3 & Q4 : Reconnaissance de position (2 formes aléatoires) ──────
+    // ── Q3 & Q4 : Reconnaissance de position (formes distinctes) ────────
     if (letterItems.length >= 2) {
-      final posLabels = {
+      const posLabels = {
         'isolated': 'Isolée',
         'initial':  'Initiale',
         'medial':   'Médiane',
         'final':    'Finale',
       };
-      final picked = [...letterItems]..shuffle(rng);
-      for (final item in picked.take(2)) {
+
+      // Group items by their visual glyph (titleAr) to detect identical forms
+      final Map<String, List<CurriculumItem>> formGroups = {};
+      for (final item in letterItems) {
+        formGroups.putIfAbsent(item.titleAr, () => []).add(item);
+      }
+
+      // Only quiz on visually distinct forms to avoid impossible questions
+      final distinctForms = formGroups.values.toList()..shuffle(rng);
+      int added = 0;
+      for (final group in distinctForms) {
+        if (added >= 2) break;
+        final item = group.first;
         final correctPos = posLabels[item.letterPosition] ?? '';
+        if (correctPos.isEmpty) continue;
+
+        // All valid position labels for this visual form
+        final allValidPos = group
+            .map((i) => posLabels[i.letterPosition] ?? '')
+            .where((p) => p.isNotEmpty)
+            .toList();
+        final extraAnswers = allValidPos.where((p) => p != correctPos).toList();
+
+        final questionLabel = allValidPos.length > 1
+            ? 'Quelle est la position de cette forme ? (plusieurs réponses valides)'
+            : 'Quelle est la position de cette forme ?';
+
         final choices = posLabels.values.toList()..shuffle(rng);
         questions.add(_QuizQuestion(
           type: _QType.positionRecognition,
-          questionFr: 'Quelle est la position de cette forme ?',
+          questionFr: questionLabel,
           displayGlyph: item.titleAr,
           correctAnswer: correctPos,
+          extraCorrectAnswers: extraAnswers,
           choices: choices,
           itemAudioUrl: item.audioUrl,
         ));
+        added++;
       }
     }
 
@@ -240,7 +266,7 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
     setState(() {
       _selected = answer;
       _answered = true;
-      if (answer == _questions[_qIndex].correctAnswer) _score++;
+      if (_questions[_qIndex].isCorrect(answer)) _score++;
     });
   }
 
@@ -577,7 +603,7 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
                         isGlyph: q.isGlyphChoice,
                         state: !_answered
                             ? _TileState.idle
-                            : choice == q.correctAnswer
+                            : q.isCorrect(choice)
                                 ? _TileState.correct
                                 : choice == _selected
                                     ? _TileState.wrong
@@ -589,8 +615,9 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
                   if (_answered) ...[
                     const SizedBox(height: 12),
                     _FeedbackBanner(
-                      correct: _selected == q.correctAnswer,
+                      correct: _selected != null && q.isCorrect(_selected!),
                       correctAnswer: q.correctAnswer,
+                      allCorrectAnswers: q.allCorrectAnswers,
                       isGlyph: q.isGlyphChoice,
                     ),
                     const SizedBox(height: 12),
@@ -862,19 +889,25 @@ class _QuizQuestion {
   final String questionFr;
   final String? displayGlyph;
   final String correctAnswer;
+  /// All valid answers (includes correctAnswer + any equivalent positions for
+  /// letters whose form is identical across multiple positions).
+  final List<String> allCorrectAnswers;
   final List<String> choices;
   final bool isGlyphChoice;
   final String? itemAudioUrl;
 
-  const _QuizQuestion({
+  _QuizQuestion({
     required this.type,
     required this.questionFr,
     required this.displayGlyph,
     required this.correctAnswer,
     required this.choices,
+    List<String>? extraCorrectAnswers,
     this.isGlyphChoice = false,
     this.itemAudioUrl,
-  });
+  }) : allCorrectAnswers = [correctAnswer, ...?extraCorrectAnswers];
+
+  bool isCorrect(String answer) => allCorrectAnswers.contains(answer);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -996,7 +1029,7 @@ class _FourFormsGrid extends StatelessWidget {
 
   const _FourFormsGrid({required this.items, required this.onPlayAudio});
 
-  String _positionLabel(String? pos) {
+  static String _positionLabel(String? pos) {
     switch (pos) {
       case 'isolated': return 'Isolée';
       case 'initial':  return 'Initiale';
@@ -1008,11 +1041,35 @@ class _FourFormsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Enforce order
+    // Enforce canonical order
     const order = ['isolated', 'initial', 'medial', 'final'];
     final sorted = [...items]..sort((a, b) =>
         order.indexOf(a.letterPosition ?? '').compareTo(
             order.indexOf(b.letterPosition ?? '')));
+
+    // Merge items that share the exact same visual glyph (titleAr).
+    // e.g. ا: isolated = 'ا', final = 'ا' → one card labeled "Isolée / Finale"
+    final List<({String glyph, List<String> positions, String? audioUrl})> cards = [];
+    for (final item in sorted) {
+      final existing = cards.indexWhere((c) => c.glyph == item.titleAr);
+      if (existing >= 0) {
+        final c = cards[existing];
+        final label = _positionLabel(item.letterPosition);
+        if (!c.positions.contains(label)) {
+          cards[existing] = (
+            glyph: c.glyph,
+            positions: [...c.positions, label],
+            audioUrl: c.audioUrl ?? item.audioUrl,
+          );
+        }
+      } else {
+        cards.add((
+          glyph: item.titleAr,
+          positions: [_positionLabel(item.letterPosition)],
+          audioUrl: item.audioUrl,
+        ));
+      }
+    }
 
     return GridView.count(
       crossAxisCount: 2,
@@ -1021,19 +1078,25 @@ class _FourFormsGrid extends StatelessWidget {
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
       childAspectRatio: 1.2,
-      children: sorted.map((item) {
+      children: cards.map((card) {
+        final isMerged = card.positions.length > 1;
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(
+              color: isMerged
+                  ? AppColors.accent.withOpacity(0.4)
+                  : AppColors.divider,
+              width: isMerged ? 1.5 : 1,
+            ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Glyph
               Text(
-                item.titleAr,
+                card.glyph,
                 style: TextStyle(
                   fontFamily: GoogleFonts.scheherazadeNew().fontFamily,
                   fontSize: 36,
@@ -1043,7 +1106,7 @@ class _FourFormsGrid extends StatelessWidget {
                 textDirection: TextDirection.rtl,
               ),
               const SizedBox(height: 4),
-              // Position label
+              // Position label(s) — merged shows e.g. "Isolée / Finale"
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
@@ -1051,14 +1114,27 @@ class _FourFormsGrid extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _positionLabel(item.letterPosition),
+                  card.positions.join(' / '),
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: isMerged ? 10 : 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.accent,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ),
+              // Note if merged
+              if (isMerged) ...[
+                const SizedBox(height: 3),
+                Text(
+                  'Même forme',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: Colors.grey[500],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -1258,8 +1334,8 @@ class _FamilyCardState extends State<_FamilyCard> {
     await _audio.stop();
     setState(() => _playingGlyph = glyph);
     try {
-      final name = glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
-      await _audio.play(UrlSource('${ApiConstants.baseUrl}/static/audio/letters/$name.mp3'));
+      final filename = glyphToAudioFilename[glyph] ?? glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
+      await _audio.play(UrlSource('${ApiConstants.baseUrl}/static/audio/letters/$filename.mp3'));
       _audio.onPlayerComplete.listen((_) {
         if (mounted) setState(() => _playingGlyph = null);
       });
@@ -1590,15 +1666,22 @@ class _AnswerTile extends StatelessWidget {
 class _FeedbackBanner extends StatelessWidget {
   final bool correct;
   final String correctAnswer;
+  final List<String> allCorrectAnswers;
   final bool isGlyph;
   const _FeedbackBanner({
     required this.correct,
     required this.correctAnswer,
+    required this.allCorrectAnswers,
     required this.isGlyph,
   });
 
   @override
   Widget build(BuildContext context) {
+    // For multi-valid-position answers: "Isolée ou Finale"
+    final answerDisplay = allCorrectAnswers.length > 1
+        ? allCorrectAnswers.join(' ou ')
+        : correctAnswer;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -1634,7 +1717,7 @@ class _FeedbackBanner extends StatelessWidget {
                       children: [
                         const TextSpan(text: 'La bonne réponse était '),
                         TextSpan(
-                          text: correctAnswer,
+                          text: answerDisplay,
                           style: TextStyle(
                             fontFamily: isGlyph
                                 ? GoogleFonts.scheherazadeNew().fontFamily
@@ -1855,10 +1938,10 @@ class _AudioComparisonWidgetState extends State<_AudioComparisonWidget> {
         // Use the reliable unit audioUrl for the current letter
         url = widget.audioUrlA!;
       } else {
-        // Construct URL from glyph → name mapping (consistent with speed round)
+        // Construct URL from glyph → exact filename map
         final glyph = which == 'A' ? widget.glyphA : widget.glyphB;
-        final name = glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
-        url = '${ApiConstants.baseUrl}/static/audio/letters/$name.mp3';
+        final filename = glyphToAudioFilename[glyph] ?? glyphToName[glyph]?.toLowerCase().replaceAll(' ', '_') ?? glyph;
+        url = '${ApiConstants.baseUrl}/static/audio/letters/$filename.mp3';
       }
       await _audio.play(UrlSource(url));
       _audio.onPlayerComplete.listen((_) {
