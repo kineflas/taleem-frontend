@@ -4,7 +4,7 @@ FROM ghcr.io/cirruslabs/flutter:stable AS builder
 WORKDIR /app
 COPY . .
 
-# ⚠️  API_BASE_URL DOIT être passé en build argument dans Coolify
+# ⚠️  API_BASE_URL  DOIT être passé en build argument dans Coolify
 #    (Settings > Build Variables > API_BASE_URL = https://<votre-backend>)
 #    Le fallback localhost ne fonctionne qu'en développement local.
 ARG API_BASE_URL=http://localhost:8000
