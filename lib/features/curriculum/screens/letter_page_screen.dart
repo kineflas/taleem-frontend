@@ -255,6 +255,85 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
       ));
     }
 
+    // ── Questions de révision — lettres précédentes ───────────────────────
+    // Find letters that come before the current one in letterGroups order.
+    // Pick up to 3 at random, add one question each (varied type).
+    // The current letter is always a distractor to raise difficulty.
+    final allGlyphsOrdered = letterGroups.expand((g) => g).toList();
+    final currentIdx = allGlyphsOrdered.indexOf(glyph);
+    if (currentIdx > 0) {
+      final previousGlyphs = allGlyphsOrdered.sublist(0, currentIdx);
+      final shuffledPrev = [...previousGlyphs]..shuffle(rng);
+      final reviewCount = min(3, shuffledPrev.length);
+
+      for (final prevGlyph in shuffledPrev.take(reviewCount)) {
+        final prevName = glyphToName[prevGlyph] ?? prevGlyph;
+        final questionType = rng.nextInt(3); // 0 = glyph→name, 1 = name→glyph, 2 = audio→name
+
+        if (questionType == 0) {
+          // Show previous glyph → choose its name
+          final distractors = allLetterNames
+              .where((n) => n != prevName)
+              .toList()
+            ..shuffle(rng);
+          // Force current letter name as one distractor to raise difficulty
+          final pool = [letterName, ...distractors.where((n) => n != letterName)]
+              .take(3)
+              .toList();
+          final choices = [prevName, ...pool]..shuffle(rng);
+          questions.add(_QuizQuestion(
+            type: _QType.glyphToName,
+            questionFr: '🔄 Révision — Quelle est cette lettre ?',
+            displayGlyph: prevGlyph,
+            correctAnswer: prevName,
+            choices: choices,
+          ));
+        } else if (questionType == 1) {
+          // Show previous letter name → choose its glyph
+          final otherGlyphs = glyphToName.keys
+              .where((g) => g != prevGlyph)
+              .toList()
+            ..shuffle(rng);
+          // Force current glyph as one distractor
+          final pool = [glyph, ...otherGlyphs.where((g) => g != glyph)]
+              .take(3)
+              .toList();
+          final choices = [prevGlyph, ...pool]..shuffle(rng);
+          questions.add(_QuizQuestion(
+            type: _QType.nameToGlyph,
+            questionFr: '🔄 Révision — Laquelle est la lettre $prevName ?',
+            displayGlyph: null,
+            correctAnswer: prevGlyph,
+            choices: choices,
+            isGlyphChoice: true,
+          ));
+        } else {
+          // Play audio of previous letter → choose its name
+          final prevFilename = glyphToAudioFilename[prevGlyph]
+              ?? glyphToName[prevGlyph]?.toLowerCase().replaceAll(' ', '_')
+              ?? prevGlyph;
+          final prevAudioUrl =
+              '${ApiConstants.baseUrl}/static/audio/letters/$prevFilename.mp3';
+          final distractors = allLetterNames
+              .where((n) => n != prevName)
+              .toList()
+            ..shuffle(rng);
+          final pool = [letterName, ...distractors.where((n) => n != letterName)]
+              .take(3)
+              .toList();
+          final choices = [prevName, ...pool]..shuffle(rng);
+          questions.add(_QuizQuestion(
+            type: _QType.soundToName,
+            questionFr: '🔄 Révision — Écoute et identifie la lettre',
+            displayGlyph: null,
+            correctAnswer: prevName,
+            choices: choices,
+            itemAudioUrl: prevAudioUrl,
+          ));
+        }
+      }
+    }
+
     questions.shuffle(rng);
     return questions;
   }
@@ -528,12 +607,31 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Question ${_qIndex + 1} / $total',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        'Question ${_qIndex + 1} / $total',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      // Show revision indicator on review questions
+                      if (_questions[_qIndex].questionFr.startsWith('🔄')) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurple.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '🔄',
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   Row(
                     children: [
@@ -574,9 +672,38 @@ class _LetterPageScreenState extends ConsumerState<LetterPageScreen>
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  // Label question
+                  // Révision badge + label question
+                  if (q.questionFr.startsWith('🔄')) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.shade50,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.deepPurple.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.refresh_rounded, size: 12, color: Colors.deepPurple.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Révision des lettres précédentes',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.deepPurple.shade400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(
-                    q.questionFr,
+                    // Strip the "🔄 Révision — " prefix for cleaner display
+                    q.questionFr.startsWith('🔄')
+                        ? q.questionFr.replaceFirst(RegExp(r'^🔄 Révision — '), '')
+                        : q.questionFr,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
