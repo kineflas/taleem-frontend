@@ -8,12 +8,14 @@ import '../../models/lesson_models.dart';
 class ExercisesTab extends StatefulWidget {
   final int lessonNumber;
   final List<QuizQuestion> quizQuestions;
+  final String? exercisesMd;
   final VoidCallback onComplete;
 
   const ExercisesTab({
     super.key,
     required this.lessonNumber,
     required this.quizQuestions,
+    this.exercisesMd,
     required this.onComplete,
   });
 
@@ -64,6 +66,15 @@ class _ExercisesTabState extends State<ExercisesTab> {
   @override
   Widget build(BuildContext context) {
     if (_exercises.isEmpty) {
+      // Show MD-based exercises if available, otherwise placeholder
+      if (widget.exercisesMd != null && widget.exercisesMd!.isNotEmpty) {
+        return _MdExercisesView(
+          content: widget.exercisesMd!,
+          onComplete: () {
+            widget.onComplete();
+          },
+        );
+      }
       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -302,6 +313,100 @@ class _ResultView extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Shows MD-based written exercises (free-form text exercises from the MD file).
+class _MdExercisesView extends StatefulWidget {
+  final String content;
+  final VoidCallback onComplete;
+
+  const _MdExercisesView({required this.content, required this.onComplete});
+
+  @override
+  State<_MdExercisesView> createState() => _MdExercisesViewState();
+}
+
+class _MdExercisesViewState extends State<_MdExercisesView> {
+  bool _completed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.edit_note, size: 22, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text(
+              'Exercices de Production',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryDark,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Text(
+            widget.content,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (!_completed)
+          ElevatedButton.icon(
+            onPressed: () {
+              setState(() => _completed = true);
+              widget.onComplete();
+            },
+            icon: const Icon(Icons.check),
+            label: const Text('Exercices termines'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 48),
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.success.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle, color: AppColors.success, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Termine',
+                  style: TextStyle(
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 32),
+      ],
     );
   }
 }

@@ -166,11 +166,13 @@ class _LessonDetailScreenState extends ConsumerState<LessonDetailScreen>
                     ),
                     DialogueTab(
                       lessonNumber: lesson.lessonNumber,
+                      dialogue: lesson.theory.dialogue,
                       onComplete: () => _markSegment('dialogue'),
                     ),
                     ExercisesTab(
                       lessonNumber: lesson.lessonNumber,
                       quizQuestions: lesson.allQuizQuestions,
+                      exercisesMd: lesson.theory.exercisesMd,
                       onComplete: () => _markSegment('exercises'),
                     ),
                     QuizTab(

@@ -97,12 +97,61 @@ class IllustrationItem extends Equatable {
   List<Object?> get props => [type, titleFr, data];
 }
 
+class DialogueLine extends Equatable {
+  final String speakerAr;
+  final String arabic;
+  final String french;
+
+  const DialogueLine({
+    required this.speakerAr,
+    required this.arabic,
+    this.french = '',
+  });
+
+  factory DialogueLine.fromJson(Map<String, dynamic> json) => DialogueLine(
+        speakerAr: json['speaker_ar'] ?? '',
+        arabic: json['arabic'] ?? '',
+        french: json['french'] ?? '',
+      );
+
+  @override
+  List<Object?> get props => [speakerAr, arabic, french];
+}
+
+class DialogueContent extends Equatable {
+  final String? situation;
+  final List<DialogueLine> lines;
+
+  const DialogueContent({
+    this.situation,
+    this.lines = const [],
+  });
+
+  factory DialogueContent.fromJson(Map<String, dynamic> json) =>
+      DialogueContent(
+        situation: json['situation'],
+        lines: (json['lines'] as List? ?? [])
+            .map((l) => DialogueLine.fromJson(l))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [situation, lines];
+}
+
 class LessonTheory extends Equatable {
   final List<TheorySection> sections;
   final List<ExampleItem> examples;
   final List<VocabItem> vocab;
   final List<IllustrationItem> illustrations;
   final String? grammarSummary;
+  // Rich prose fields from MD parser
+  final String? objective;
+  final String? coinExperts;
+  final DialogueContent? dialogue;
+  final String? miseEnSituation;
+  final String? exercisesMd;
+  final String? pronunciation;
 
   const LessonTheory({
     this.sections = const [],
@@ -110,6 +159,12 @@ class LessonTheory extends Equatable {
     this.vocab = const [],
     this.illustrations = const [],
     this.grammarSummary,
+    this.objective,
+    this.coinExperts,
+    this.dialogue,
+    this.miseEnSituation,
+    this.exercisesMd,
+    this.pronunciation,
   });
 
   factory LessonTheory.fromJson(Map<String, dynamic> json) => LessonTheory(
@@ -126,11 +181,30 @@ class LessonTheory extends Equatable {
             .map((i) => IllustrationItem.fromJson(i))
             .toList(),
         grammarSummary: json['grammar_summary'],
+        objective: json['objective'],
+        coinExperts: json['coin_experts'],
+        dialogue: json['dialogue'] != null
+            ? DialogueContent.fromJson(json['dialogue'])
+            : null,
+        miseEnSituation: json['mise_en_situation'],
+        exercisesMd: json['exercises_md'],
+        pronunciation: json['pronunciation'],
       );
 
   @override
-  List<Object?> get props =>
-      [sections, examples, vocab, illustrations, grammarSummary];
+  List<Object?> get props => [
+        sections,
+        examples,
+        vocab,
+        illustrations,
+        grammarSummary,
+        objective,
+        coinExperts,
+        dialogue,
+        miseEnSituation,
+        exercisesMd,
+        pronunciation,
+      ];
 }
 
 // ── Quiz ──────────────────────────────────────────────────────────────────

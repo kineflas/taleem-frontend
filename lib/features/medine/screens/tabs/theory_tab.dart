@@ -25,7 +25,9 @@ class _TheoryTabState extends State<TheoryTab> {
     final t = widget.theory;
     final hasContent = t.sections.isNotEmpty ||
         t.examples.isNotEmpty ||
-        t.vocab.isNotEmpty;
+        t.vocab.isNotEmpty ||
+        t.objective != null ||
+        t.coinExperts != null;
 
     if (!hasContent) {
       return const Center(
@@ -58,6 +60,12 @@ class _TheoryTabState extends State<TheoryTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Objective
+          if (t.objective != null) ...[
+            _ObjectiveCard(objective: t.objective!),
+            const SizedBox(height: 16),
+          ],
+
           // Grammar summary
           if (t.grammarSummary != null) ...[
             _GrammarSummaryCard(summary: t.grammarSummary!),
@@ -67,6 +75,18 @@ class _TheoryTabState extends State<TheoryTab> {
           // Theory sections
           for (final section in t.sections) ...[
             _SectionCard(section: section),
+            const SizedBox(height: 12),
+          ],
+
+          // Coin des experts
+          if (t.coinExperts != null) ...[
+            _CoinExpertsCard(content: t.coinExperts!),
+            const SizedBox(height: 12),
+          ],
+
+          // Pronunciation
+          if (t.pronunciation != null) ...[
+            _PronunciationCard(content: t.pronunciation!),
             const SizedBox(height: 12),
           ],
 
@@ -92,6 +112,12 @@ class _TheoryTabState extends State<TheoryTab> {
           // Illustrations
           for (final illus in t.illustrations) ...[
             _IllustrationCard(illustration: illus),
+            const SizedBox(height: 12),
+          ],
+
+          // Mise en situation
+          if (t.miseEnSituation != null) ...[
+            _MiseEnSituationCard(content: t.miseEnSituation!),
             const SizedBox(height: 12),
           ],
 
@@ -418,6 +444,179 @@ class _IllustrationCard extends StatelessWidget {
                 illustration.data.toString(),
                 style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ObjectiveCard extends StatelessWidget {
+  final String objective;
+  const _ObjectiveCard({required this.objective});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withOpacity(0.08),
+            AppColors.primary.withOpacity(0.03),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.flag_rounded, color: AppColors.primary, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Objectif',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  objective,
+                  style: const TextStyle(fontSize: 14, color: AppColors.textPrimary, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoinExpertsCard extends StatelessWidget {
+  final String content;
+  const _CoinExpertsCard({required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      color: const Color(0xFFFFF8E1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.school, size: 20, color: Color(0xFFE65100)),
+                SizedBox(width: 8),
+                Text(
+                  'Le coin des experts',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFE65100),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              content,
+              style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PronunciationCard extends StatelessWidget {
+  final String content;
+  const _PronunciationCard({required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      color: const Color(0xFFE8F5E9),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.volume_up, size: 20, color: Color(0xFF2E7D32)),
+                SizedBox(width: 8),
+                Text(
+                  'Prononciation',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2E7D32),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              content,
+              style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.textPrimary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiseEnSituationCard extends StatelessWidget {
+  final String content;
+  const _MiseEnSituationCard({required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      color: const Color(0xFFE3F2FD),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.theater_comedy, size: 20, color: Color(0xFF1565C0)),
+                SizedBox(width: 8),
+                Text(
+                  'Mise en situation',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1565C0),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              content,
+              style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.textPrimary),
+            ),
           ],
         ),
       ),
