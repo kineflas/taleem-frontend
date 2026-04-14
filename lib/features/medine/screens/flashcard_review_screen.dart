@@ -131,7 +131,7 @@ class _CardView extends StatelessWidget {
                 transitionBuilder: (child, animation) {
                   final rotate = Tween(begin: pi / 2, end: 0.0).animate(animation);
                   return AnimatedBuilder(
-                    animation: rotate,
+                    listenable: rotate,
                     builder: (_, child) => Transform(
                       transform: Matrix4.identity()..rotateY(rotate.value),
                       alignment: Alignment.center,
