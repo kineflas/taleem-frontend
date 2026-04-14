@@ -38,6 +38,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/login',
     redirect: (context, state) {
+      // While auth is loading (token validation in progress), don't redirect
+      // to avoid flashing the login page.
+      if (authState.isLoading) return null;
+
       final isLoggedIn = authState.value?.accessToken != null;
       final isAuth = state.matchedLocation.startsWith('/login') ||
           state.matchedLocation.startsWith('/register');
