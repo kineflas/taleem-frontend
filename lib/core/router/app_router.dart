@@ -31,6 +31,11 @@ import '../../features/hifz/screens/hifz_goal_create_screen.dart';
 import '../../features/hifz/screens/hifz_session_screen.dart';
 import '../../features/hifz/screens/hifz_revision_screen.dart';
 import '../../features/hifz/screens/surah_heatmap_screen.dart';
+import '../../features/medine/screens/lesson_list_screen.dart';
+import '../../features/medine/screens/lesson_detail_screen.dart';
+import '../../features/medine/screens/flashcard_review_screen.dart';
+import '../../features/medine/screens/diagnostic_screen.dart';
+import '../../features/medine/screens/gamification_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -104,8 +109,29 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/student/curriculum', builder: (_, __) => const CurriculumLibraryScreen()),
           GoRoute(path: '/student/learn', builder: (_, __) => const LearningHubScreen()),
           GoRoute(path: '/student/hifz', builder: (_, __) => const HifzHubScreen()),
+          GoRoute(path: '/student/medine', builder: (_, __) => const LessonListScreen()),
           GoRoute(path: '/student/settings', builder: (_, __) => const StudentSettingsScreen()),
         ],
+      ),
+
+      // Medine deep routes (outside shell — full screen)
+      GoRoute(
+        path: '/medine/lesson/:lessonNumber',
+        builder: (ctx, state) => LessonDetailScreen(
+          lessonNumber: int.parse(state.pathParameters['lessonNumber']!),
+        ),
+      ),
+      GoRoute(
+        path: '/medine/flashcards',
+        builder: (_, __) => const FlashcardReviewScreen(),
+      ),
+      GoRoute(
+        path: '/medine/diagnostic',
+        builder: (_, __) => const DiagnosticScreen(),
+      ),
+      GoRoute(
+        path: '/medine/gamification',
+        builder: (_, __) => const GamificationScreen(),
       ),
 
       // Curriculum deep routes (outside shell — full screen)

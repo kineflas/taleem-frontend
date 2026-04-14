@@ -62,4 +62,21 @@ class ApiConstants {
   static const String studentHifzVersesReview = '/student/hifz/verses/review';
   static const String studentHifzXp = '/student/hifz/xp';
   static const String studentHifzReciters = '/student/hifz/reciters';
+
+  // Medine Lessons
+  static const String lessons = '/api/lessons';
+  static String lessonDetail(int n) => '/api/lessons/$n';
+  static String lessonProgress(int n) => '/api/lessons/$n/progress';
+  static String lessonQuizSubmit(int n) => '/api/lessons/$n/quiz/submit';
+
+  // Flashcards (SRS)
+  static const String flashcardsDue = '/api/flashcards/due';
+  static String flashcardsNew(int lesson) => '/api/flashcards/new/$lesson';
+  static String flashcardReview(String id) => '/api/flashcards/$id/review';
+  static const String flashcardsStats = '/api/flashcards/stats';
+
+  // Diagnostic
+  static const String diagnosticStart = '/api/diagnostic/start';
+  static String diagnosticAnswer(String id) => '/api/diagnostic/$id/answer';
+  static String diagnosticResult(String id) => '/api/diagnostic/$id/result';
 }
