@@ -77,6 +77,18 @@ class CurriculumLibraryScreen extends ConsumerWidget {
                       ),
                     );
                   }),
+                  // Add Medine V2 feature card in "Comprendre l'arabe"
+                  if (cat == ProgramCategory.comprendreArabe) ...[
+                    _FeatureCard(
+                      icon: '🐫',
+                      titleFr: 'Tome 1 de Médine — V2',
+                      titleAr: 'الكتاب الأول من سلسلة المدينة',
+                      subtitleFr: 'Parcours immersif : 23 leçons interactives',
+                      color: const Color(0xFF1B4332),
+                      onTap: () => context.go('/student/medine-v2'),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   // Add special feature cards after the Coran category
                   if (cat == ProgramCategory.coran) ...[
                     _FeatureCard(
