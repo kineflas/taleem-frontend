@@ -18,6 +18,7 @@ class _DiscoveryStepState extends State<DiscoveryStep> {
   int _currentPage = 0;
 
   List<DiscoveryCard> get cards => widget.lesson.discoveryCards;
+  bool get isLastCard => _currentPage >= cards.length - 1;
 
   @override
   void initState() {
@@ -29,6 +30,26 @@ class _DiscoveryStepState extends State<DiscoveryStep> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _goNext() {
+    if (isLastCard) {
+      widget.onComplete();
+    } else {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _goBack() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override
@@ -44,6 +65,65 @@ class _DiscoveryStepState extends State<DiscoveryStep> {
 
     return Column(
       children: [
+        // ── Card counter header ──────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Row(
+            children: [
+              // Back arrow (if not first card)
+              if (_currentPage > 0)
+                GestureDetector(
+                  onTap: _goBack,
+                  child: const Icon(Icons.arrow_back_ios, size: 18, color: Color(0xFF666666)),
+                )
+              else
+                const SizedBox(width: 18),
+              const Spacer(),
+              // Card counter
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D6A4F).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_currentPage + 1} / ${cards.length}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF2D6A4F),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              const SizedBox(width: 18),
+            ],
+          ),
+        ),
+
+        // ── Page dots ────────────────────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(cards.length, (i) => AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: i == _currentPage ? 24 : 8,
+              height: 4,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: i == _currentPage
+                    ? const Color(0xFF2D6A4F)
+                    : i < _currentPage
+                        ? const Color(0xFF2D6A4F).withOpacity(0.4)
+                        : Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            )),
+          ),
+        ),
+
+        // ── Card content (PageView) ──────────────────────────────────
         Expanded(
           child: PageView.builder(
             controller: _pageController,
@@ -53,55 +133,51 @@ class _DiscoveryStepState extends State<DiscoveryStep> {
           ),
         ),
 
-        // Page indicator + next button
+        // ── Bottom navigation bar (always visible) ──────────────────
         SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(
-              children: [
-                // Page dots
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(cards.length, (i) => Container(
-                      width: i == _currentPage ? 24 : 8,
-                      height: 8,
-                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: i == _currentPage
-                            ? const Color(0xFF2D6A4F)
-                            : Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    )),
-                  ),
-                ),
-
-                // Next / Complete button
-                ElevatedButton.icon(
-                  onPressed: _currentPage < cards.length - 1
-                      ? () => _pageController.nextPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          )
-                      : widget.onComplete,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2D6A4F),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  icon: Icon(_currentPage < cards.length - 1
-                      ? Icons.arrow_forward
-                      : Icons.check),
-                  label: Text(_currentPage < cards.length - 1
-                      ? 'Suivant'
-                      : 'Continuer'),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFDF8F0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
                 ),
               ],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _goNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isLastCard
+                      ? const Color(0xFF1B4332)
+                      : const Color(0xFF2D6A4F),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 2,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      isLastCard ? 'Continuer' : 'Suivant',
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      isLastCard ? Icons.check_rounded : Icons.arrow_forward_rounded,
+                      size: 22,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -136,7 +212,7 @@ class _RuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -227,12 +303,12 @@ class _ExpertCornerCard extends StatefulWidget {
 }
 
 class _ExpertCornerCardState extends State<_ExpertCornerCard> {
-  bool _expanded = false;
+  bool _expanded = true; // Start expanded so user sees content
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -278,7 +354,7 @@ class _ExpertCornerCardState extends State<_ExpertCornerCard> {
             ),
           ),
 
-          // Content (expandable)
+          // Content
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
             secondChild: Padding(
@@ -305,7 +381,7 @@ class _PronunciationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -388,7 +464,7 @@ class _ExamplesTableCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -470,7 +546,7 @@ class _MiseEnSituationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
