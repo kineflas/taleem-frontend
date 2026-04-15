@@ -79,4 +79,10 @@ class ApiConstants {
   static const String diagnosticStart = '/api/diagnostic/start';
   static String diagnosticAnswer(String id) => '/api/diagnostic/$id/answer';
   static String diagnosticResult(String id) => '/api/diagnostic/$id/result';
+
+  // Medine V2
+  static const String lessonsV2 = '/api/v2/lessons';
+  static String lessonV2Detail(int n) => '/api/v2/lessons/$n';
+  static String lessonV2Progress(int n) => '/api/v2/lessons/$n/progress';
+  static String lessonV2QuizSubmit(int n) => '/api/v2/lessons/$n/quiz/submit';
 }

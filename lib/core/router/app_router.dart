@@ -36,6 +36,8 @@ import '../../features/medine/screens/lesson_detail_screen.dart';
 import '../../features/medine/screens/flashcard_review_screen.dart';
 import '../../features/medine/screens/diagnostic_screen.dart';
 import '../../features/medine/screens/gamification_screen.dart';
+import '../../features/medine_v2/screens/caravane_map_screen.dart';
+import '../../features/medine_v2/screens/lesson_flow_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -110,6 +112,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/student/learn', builder: (_, __) => const LearningHubScreen()),
           GoRoute(path: '/student/hifz', builder: (_, __) => const HifzHubScreen()),
           GoRoute(path: '/student/medine', builder: (_, __) => const LessonListScreen()),
+          GoRoute(path: '/student/medine-v2', builder: (_, __) => const CaravaneMapScreen()),
           GoRoute(path: '/student/settings', builder: (_, __) => const StudentSettingsScreen()),
         ],
       ),
@@ -132,6 +135,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/medine/gamification',
         builder: (_, __) => const GamificationScreen(),
+      ),
+
+      // Medine V2 deep routes (full screen)
+      GoRoute(
+        path: '/medine-v2/lesson/:lessonNumber',
+        builder: (ctx, state) => LessonFlowScreen(
+          lessonNumber: int.parse(state.pathParameters['lessonNumber']!),
+        ),
       ),
 
       // Curriculum deep routes (outside shell — full screen)
