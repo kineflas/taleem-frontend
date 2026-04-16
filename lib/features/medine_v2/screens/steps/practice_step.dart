@@ -347,6 +347,51 @@ class _WordChip extends StatelessWidget {
 
 // ── FILL_BLANK Exercise ─────────────────────────────────────────────────────
 
+/// Extract Arabic option words from prompt like "Complétez avec هَذَا ou هَذِهِ :"
+List<String> _extractOptionsFromPrompt(String? prompt) {
+  if (prompt == null || prompt.isEmpty) return [];
+
+  // Try to find the part after "avec" and before ":"
+  final avecIdx = prompt.toLowerCase().indexOf('avec');
+  if (avecIdx < 0) return [];
+
+  var after = prompt.substring(avecIdx + 4).trim();
+  // Remove "et ..." suffix (e.g. "et changez la voyelle...")
+  final etIdx = after.indexOf(' et ');
+  if (etIdx > 0) after = after.substring(0, etIdx);
+  after = after.replaceAll(RegExp(r'\s*:\s*$'), '').trim();
+
+  // Split by " ou ", "، ", ", ", "/"
+  final parts = after.split(RegExp(r'\s+ou\s+|،\s*|,\s*|/'));
+
+  // Filter: only keep tokens that contain Arabic characters
+  final arabicRe = RegExp(r'[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]');
+  final options = <String>[];
+  for (final p in parts) {
+    final trimmed = p.trim();
+    if (trimmed.isNotEmpty && arabicRe.hasMatch(trimmed)) {
+      // Extract just the Arabic portion if mixed with French
+      final arabicOnly = trimmed
+          .split(' ')
+          .where((w) => arabicRe.hasMatch(w))
+          .join(' ')
+          .trim();
+      if (arabicOnly.isNotEmpty) options.add(arabicOnly);
+    }
+  }
+  return options;
+}
+
+/// Clean sentence for display: remove markdown bold markers and extra backslashes
+String _cleanSentence(String raw) {
+  return raw
+      .replaceAll('**', '')
+      .replaceAll(r'\_\_\_', '______')
+      .replaceAll(r'\\_', '_')
+      .replaceAll('______', ' ______ ')
+      .trim();
+}
+
 class _FillBlankExercise extends StatefulWidget {
   final ExerciseV2 exercise;
   final void Function({bool correct, int xp}) onComplete;
@@ -359,21 +404,31 @@ class _FillBlankExercise extends StatefulWidget {
 
 class _FillBlankExerciseState extends State<_FillBlankExercise> {
   int _currentItem = 0;
-  int _score = 0;
+  String? _selectedOption;
+  bool _revealed = false;
+  late final List<String> _options;
 
-  void _answer(String selected) {
-    final item = widget.exercise.items[_currentItem];
-    final correct = selected == item.answer;
-    if (correct) _score++;
+  @override
+  void initState() {
+    super.initState();
+    _options = _extractOptionsFromPrompt(widget.exercise.promptFr);
+  }
 
+  void _selectOption(String option) {
+    if (_revealed) return;
+    setState(() {
+      _selectedOption = option;
+    });
+  }
+
+  void _nextItem() {
     setState(() {
       if (_currentItem < widget.exercise.items.length - 1) {
         _currentItem++;
+        _selectedOption = null;
+        _revealed = false;
       } else {
-        widget.onComplete(
-          correct: _score > widget.exercise.items.length / 2,
-          xp: _score * 5,
-        );
+        widget.onComplete(xp: widget.exercise.items.length * 5);
       }
     });
   }
@@ -390,38 +445,61 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
     }
 
     final item = widget.exercise.items[_currentItem];
+    final sentence = _cleanSentence(item.sentence ?? '');
+
+    // Build display sentence: replace blank with selected option
+    final displaySentence = _selectedOption != null
+        ? sentence.replaceFirst(RegExp(r'_+'), _selectedOption!)
+        : sentence;
 
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Title
           Text(
             widget.exercise.promptFr ?? 'Complétez',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A2E),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             '${_currentItem + 1} / ${widget.exercise.items.length}',
-            style: const TextStyle(color: Color(0xFF999999)),
+            style: const TextStyle(color: Color(0xFF999999), fontSize: 13),
           ),
           const SizedBox(height: 24),
 
-          // Sentence with blank
+          // Sentence card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _selectedOption != null
+                    ? const Color(0xFF2D6A4F).withOpacity(0.4)
+                    : Colors.grey.shade200,
+                width: _selectedOption != null ? 2 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Directionality(
               textDirection: TextDirection.rtl,
               child: Text(
-                item.sentence ?? '',
+                displaySentence,
                 style: const TextStyle(
-                  fontSize: 22,
+                  fontSize: 24,
                   fontFamily: 'Amiri',
                   color: Color(0xFF1A1A2E),
                   height: 1.8,
@@ -429,27 +507,101 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // Info text
+          // "Tapez sur la bonne réponse" label
           const Text(
-            'Tapez sur la bonne réponse :',
-            style: TextStyle(color: Color(0xFF666666)),
+            'Choisissez la bonne réponse :',
+            style: TextStyle(
+              color: Color(0xFF666666),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Simple answer — just show continue since we don't have answer options parsed
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: () => _answer(item.answer ?? ''),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2D6A4F),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          // Option buttons
+          if (_options.isNotEmpty)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _options.map((opt) {
+                final isSelected = _selectedOption == opt;
+                return GestureDetector(
+                  onTap: () => _selectOption(opt),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF2D6A4F).withOpacity(0.12)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF2D6A4F)
+                            : Colors.grey.shade300,
+                        width: isSelected ? 2 : 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      opt,
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontFamily: 'Amiri',
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? const Color(0xFF1B4332)
+                            : const Color(0xFF1A1A2E),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            )
+          else
+            // Fallback: if no options could be parsed, show a text field placeholder
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Text('Continuer', style: TextStyle(fontSize: 16)),
+              child: const Text(
+                'Réfléchissez à la réponse, puis continuez.',
+                style: TextStyle(color: Color(0xFF666666), fontStyle: FontStyle.italic),
+              ),
+            ),
+
+          const Spacer(),
+
+          // Next button
+          SafeArea(
+            top: false,
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: (_selectedOption != null || _options.isEmpty) ? _nextItem : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2D6A4F),
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 2,
+                ),
+                child: Text(
+                  _currentItem < widget.exercise.items.length - 1 ? 'Suivant' : 'Terminer',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                ),
+              ),
             ),
           ),
         ],
