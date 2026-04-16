@@ -404,8 +404,9 @@ class _FillBlankExercise extends StatefulWidget {
 
 class _FillBlankExerciseState extends State<_FillBlankExercise> {
   int _currentItem = 0;
+  int _score = 0;
   String? _selectedOption;
-  bool _revealed = false;
+  bool? _isCorrect;          // null = not checked, true/false = feedback shown
   late final List<String> _options;
 
   @override
@@ -415,20 +416,54 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
   }
 
   void _selectOption(String option) {
-    if (_revealed) return;
+    if (_isCorrect != null) return; // Already checked
+    setState(() => _selectedOption = option);
+  }
+
+  void _check() {
+    if (_selectedOption == null) return;
+    final item = widget.exercise.items[_currentItem];
+    final answer = (item.answer ?? '').trim();
+
+    if (answer.isEmpty) {
+      // No known answer → self-check, always advance
+      _advanceAfterDelay(true);
+      return;
+    }
+
+    final correct = _selectedOption!.trim() == answer;
     setState(() {
-      _selectedOption = option;
+      _isCorrect = correct;
+      if (correct) _score++;
+    });
+
+    // Auto-advance after feedback delay
+    Future.delayed(Duration(milliseconds: correct ? 800 : 1800), () {
+      if (!mounted) return;
+      _advance();
     });
   }
 
-  void _nextItem() {
+  void _advanceAfterDelay(bool correct) {
+    setState(() => _isCorrect = correct);
+    if (correct) _score++;
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      _advance();
+    });
+  }
+
+  void _advance() {
     setState(() {
       if (_currentItem < widget.exercise.items.length - 1) {
         _currentItem++;
         _selectedOption = null;
-        _revealed = false;
+        _isCorrect = null;
       } else {
-        widget.onComplete(xp: widget.exercise.items.length * 5);
+        widget.onComplete(
+          correct: _score > widget.exercise.items.length / 2,
+          xp: _score * 5,
+        );
       }
     });
   }
@@ -446,11 +481,31 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
 
     final item = widget.exercise.items[_currentItem];
     final sentence = _cleanSentence(item.sentence ?? '');
+    final correctAnswer = (item.answer ?? '').trim();
+    final hasAnswer = correctAnswer.isNotEmpty;
 
-    // Build display sentence: replace blank with selected option
-    final displaySentence = _selectedOption != null
-        ? sentence.replaceFirst(RegExp(r'_+'), _selectedOption!)
-        : sentence;
+    // Build display sentence: replace blank with selected option or correct answer
+    String displaySentence = sentence;
+    if (_isCorrect == false && hasAnswer) {
+      // Show the correct answer after wrong selection
+      displaySentence = sentence.replaceFirst(RegExp(r'_+'), correctAnswer);
+    } else if (_selectedOption != null) {
+      displaySentence = sentence.replaceFirst(RegExp(r'_+'), _selectedOption!);
+    }
+
+    // Determine card border color based on state
+    Color cardBorderColor = Colors.grey.shade200;
+    double cardBorderWidth = 1;
+    if (_isCorrect == true) {
+      cardBorderColor = const Color(0xFF2D6A4F);
+      cardBorderWidth = 2;
+    } else if (_isCorrect == false) {
+      cardBorderColor = const Color(0xFFC0392B);
+      cardBorderWidth = 2;
+    } else if (_selectedOption != null) {
+      cardBorderColor = const Color(0xFF2D6A4F).withOpacity(0.4);
+      cardBorderWidth = 2;
+    }
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -478,14 +533,13 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: _isCorrect == true
+                  ? const Color(0xFFD8F3DC)
+                  : _isCorrect == false
+                      ? const Color(0xFFFDEDED)
+                      : Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _selectedOption != null
-                    ? const Color(0xFF2D6A4F).withOpacity(0.4)
-                    : Colors.grey.shade200,
-                width: _selectedOption != null ? 2 : 1,
-              ),
+              border: Border.all(color: cardBorderColor, width: cardBorderWidth),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.04),
@@ -507,18 +561,72 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
 
-          // "Tapez sur la bonne réponse" label
-          const Text(
-            'Choisissez la bonne réponse :',
-            style: TextStyle(
-              color: Color(0xFF666666),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+          // Feedback message
+          if (_isCorrect == true)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF2D6A4F), size: 22),
+                  SizedBox(width: 8),
+                  Text(
+                    'Bonne réponse !',
+                    style: TextStyle(
+                      color: Color(0xFF2D6A4F),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
+          if (_isCorrect == false)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.cancel, color: Color(0xFFC0392B), size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 15, color: Color(0xFFC0392B)),
+                        children: [
+                          const TextSpan(
+                            text: 'Incorrect. ',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const TextSpan(text: 'La réponse est '),
+                          TextSpan(
+                            text: correctAnswer,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Amiri',
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 20),
+
+          // "Choisissez" label
+          if (_isCorrect == null)
+            const Text(
+              'Choisissez la bonne réponse :',
+              style: TextStyle(
+                color: Color(0xFF666666),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          if (_isCorrect == null) const SizedBox(height: 14),
 
           // Option buttons
           if (_options.isNotEmpty)
@@ -527,22 +635,36 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
               runSpacing: 12,
               children: _options.map((opt) {
                 final isSelected = _selectedOption == opt;
+                // After checking, highlight correct/wrong
+                Color bgColor = Colors.white;
+                Color borderColor = Colors.grey.shade300;
+                double bw = 1.0;
+
+                if (_isCorrect != null && hasAnswer) {
+                  if (opt == correctAnswer) {
+                    bgColor = const Color(0xFFD8F3DC);
+                    borderColor = const Color(0xFF2D6A4F);
+                    bw = 2;
+                  } else if (isSelected && _isCorrect == false) {
+                    bgColor = const Color(0xFFFDEDED);
+                    borderColor = const Color(0xFFC0392B);
+                    bw = 2;
+                  }
+                } else if (isSelected) {
+                  bgColor = const Color(0xFF2D6A4F).withOpacity(0.12);
+                  borderColor = const Color(0xFF2D6A4F);
+                  bw = 2;
+                }
+
                 return GestureDetector(
                   onTap: () => _selectOption(opt),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF2D6A4F).withOpacity(0.12)
-                          : Colors.white,
+                      color: bgColor,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF2D6A4F)
-                            : Colors.grey.shade300,
-                        width: isSelected ? 2 : 1,
-                      ),
+                      border: Border.all(color: borderColor, width: bw),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.05),
@@ -557,9 +679,7 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
                         fontSize: 26,
                         fontFamily: 'Amiri',
                         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected
-                            ? const Color(0xFF1B4332)
-                            : const Color(0xFF1A1A2E),
+                        color: const Color(0xFF1A1A2E),
                       ),
                     ),
                   ),
@@ -567,7 +687,6 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
               }).toList(),
             )
           else
-            // Fallback: if no options could be parsed, show a text field placeholder
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -582,28 +701,29 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
 
           const Spacer(),
 
-          // Next button
-          SafeArea(
-            top: false,
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: (_selectedOption != null || _options.isEmpty) ? _nextItem : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2D6A4F),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 2,
-                ),
-                child: Text(
-                  _currentItem < widget.exercise.items.length - 1 ? 'Suivant' : 'Terminer',
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          // Verify / Next button
+          if (_isCorrect == null)
+            SafeArea(
+              top: false,
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: (_selectedOption != null || _options.isEmpty) ? _check : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2D6A4F),
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    'Vérifier',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -624,7 +744,40 @@ class _TranslateExercise extends StatefulWidget {
 
 class _TranslateExerciseState extends State<_TranslateExercise> {
   int _currentItem = 0;
-  bool _showHint = false;
+  bool _revealed = false;
+  bool? _selfEval; // null = not evaluated, true = got it, false = didn't
+  final _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  void _reveal() {
+    setState(() => _revealed = true);
+  }
+
+  void _selfCheck(bool gotIt) {
+    setState(() => _selfEval = gotIt);
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      _advance();
+    });
+  }
+
+  void _advance() {
+    setState(() {
+      if (_currentItem < widget.exercise.items.length - 1) {
+        _currentItem++;
+        _revealed = false;
+        _selfEval = null;
+        _textController.clear();
+      } else {
+        widget.onComplete(xp: 9);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -638,84 +791,251 @@ class _TranslateExerciseState extends State<_TranslateExercise> {
     }
 
     final item = widget.exercise.items[_currentItem];
+    final hasAnswer = (item.answerAr ?? '').isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Traduisez en arabe',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+          // Header
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Traduisez en arabe',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                ),
+              ),
+              Text(
+                '${_currentItem + 1} / ${widget.exercise.items.length}',
+                style: const TextStyle(color: Color(0xFF999999), fontSize: 13),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          // French prompt
+          // French prompt card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: const Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: Text(
-              item.promptFr ?? '',
-              style: const TextStyle(fontSize: 18, color: Color(0xFF1A1A2E)),
+            child: Row(
+              children: [
+                const Text('🇫🇷', style: TextStyle(fontSize: 22)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.promptFr ?? '',
+                    style: const TextStyle(fontSize: 18, color: Color(0xFF1A1A2E), fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 16),
 
-          if (_showHint && (item.answerAr ?? '').isNotEmpty)
+          // Arabic text input
+          Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _selfEval == true
+                    ? const Color(0xFF2D6A4F)
+                    : _selfEval == false
+                        ? const Color(0xFFC0392B)
+                        : const Color(0xFF2D6A4F).withOpacity(0.3),
+                width: _selfEval != null ? 2 : 1,
+              ),
+            ),
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: TextField(
+                controller: _textController,
+                enabled: !_revealed,
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontFamily: 'Amiri',
+                  color: Color(0xFF1A1A2E),
+                  height: 1.6,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'اكتب هنا...',
+                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 20),
+                  contentPadding: const EdgeInsets.all(16),
+                  border: InputBorder.none,
+                ),
+                maxLines: 2,
+                minLines: 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Revealed answer card
+          if (_revealed && hasAnswer)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFF4A261).withOpacity(0.4)),
               ),
-              child: Directionality(
-                textDirection: TextDirection.rtl,
-                child: Text(
-                  item.answerAr!,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontFamily: 'Amiri',
-                    color: Color(0xFF1A1A2E),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Réponse attendue :',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF999999),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: Text(
+                      item.answerAr!,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontFamily: 'Amiri',
+                        color: Color(0xFF1A1A2E),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Self-evaluation buttons (shown after reveal)
+          if (_revealed && _selfEval == null) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Avez-vous trouvé la bonne réponse ?',
+              style: TextStyle(
+                color: Color(0xFF666666),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _selfCheck(false),
+                      icon: const Icon(Icons.close, color: Color(0xFFC0392B)),
+                      label: const Text('Pas encore', style: TextStyle(color: Color(0xFFC0392B))),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFFC0392B)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _selfCheck(true),
+                      icon: const Icon(Icons.check),
+                      label: const Text('Correct !'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2D6A4F),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Feedback after self-eval
+          if (_selfEval == true)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Color(0xFF2D6A4F), size: 22),
+                  SizedBox(width: 8),
+                  Text('Bravo !', style: TextStyle(color: Color(0xFF2D6A4F), fontWeight: FontWeight.bold, fontSize: 15)),
+                ],
+              ),
+            ),
+          if (_selfEval == false)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Color(0xFFE76F51), size: 22),
+                  SizedBox(width: 8),
+                  Text('On continue, ça viendra !', style: TextStyle(color: Color(0xFFE76F51), fontWeight: FontWeight.w500, fontSize: 15)),
+                ],
               ),
             ),
 
           const Spacer(),
 
-          Row(
-            children: [
-              TextButton.icon(
-                onPressed: () => setState(() => _showHint = !_showHint),
-                icon: const Icon(Icons.lightbulb_outline),
-                label: Text(_showHint ? 'Masquer' : 'Indice'),
-              ),
-              const Spacer(),
-              ElevatedButton(
-                onPressed: () {
-                  if (_currentItem < widget.exercise.items.length - 1) {
-                    setState(() {
-                      _currentItem++;
-                      _showHint = false;
-                    });
-                  } else {
-                    widget.onComplete(xp: 9);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2D6A4F),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          // Bottom button: "Voir la réponse" or "Suivant" (for no-answer items)
+          if (!_revealed)
+            SafeArea(
+              top: false,
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _reveal,
+                  icon: const Icon(Icons.visibility),
+                  label: const Text(
+                    'Voir la réponse',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B4332),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
                 ),
-                child: const Text('Suivant'),
               ),
-            ],
-          ),
+            ),
+
+          // If no answer available, show skip button instead of self-eval
+          if (_revealed && !hasAnswer)
+            SafeArea(
+              top: false,
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _advance,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2D6A4F),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
+                  child: Text(
+                    _currentItem < widget.exercise.items.length - 1 ? 'Suivant' : 'Terminer',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
