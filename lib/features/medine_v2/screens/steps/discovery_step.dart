@@ -18,7 +18,7 @@ class _DiscoveryStepState extends State<DiscoveryStep> {
   int _currentPage = 0;
 
   List<DiscoveryCard> get cards => widget.lesson.discoveryCards;
-  bool get isLastCard => _currentPage >= cards.length - 1;
+  bool get isLastCard => cards.isEmpty || _currentPage >= cards.length - 1;
 
   @override
   void initState() {

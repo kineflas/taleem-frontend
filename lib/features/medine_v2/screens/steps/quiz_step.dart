@@ -5,8 +5,9 @@ import '../../models/lesson_models_v2.dart';
 class QuizStep extends StatefulWidget {
   final LessonContentV2 lesson;
   final void Function({required int stars, required int xp}) onComplete;
+  final void Function(String questionId, int selected)? onAnswer;
 
-  const QuizStep({super.key, required this.lesson, required this.onComplete});
+  const QuizStep({super.key, required this.lesson, required this.onComplete, this.onAnswer});
 
   @override
   State<QuizStep> createState() => _QuizStepState();
@@ -38,6 +39,9 @@ class _QuizStepState extends State<QuizStep> {
     if (index == question.correct) {
       _correctCount++;
     }
+
+    // Record the answer for backend submission
+    widget.onAnswer?.call(question.id, index);
 
     // Auto-advance after delay
     Future.delayed(const Duration(milliseconds: 1200), () {

@@ -1,3 +1,4 @@
+import 'dart:developer' as dev;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +25,7 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
   int _currentStep = 0;
   int _quizStars = 0;
   int _xpEarned = 0;
+  LessonContentV2? _lesson;
 
   static const _stepLabels = [
     'Objectif',
@@ -42,6 +44,61 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
         _currentStep++;
       }
     });
+
+    // When reaching the summary step (step 5), submit results to backend
+    if (_currentStep == 5) {
+      _submitResults();
+    }
+  }
+
+  // Store the user's actual quiz answers for backend submission
+  List<Map<String, dynamic>> _quizAnswers = [];
+
+  void _recordQuizAnswer(String questionId, int selected) {
+    _quizAnswers.add({'question_id': questionId, 'selected': selected});
+  }
+
+  /// Submit quiz results to backend so the lesson is marked complete
+  /// and the next lesson gets unlocked.
+  Future<void> _submitResults() async {
+    try {
+      final api = ref.read(medineV2ApiProvider);
+      final lesson = _lesson;
+      if (lesson == null) return;
+
+      if (lesson.quizQuestions.isNotEmpty && _quizAnswers.isNotEmpty) {
+        // Submit actual quiz answers → backend calculates authoritative score
+        final result = await api.submitQuiz(
+          widget.lessonNumber,
+          answers: _quizAnswers,
+          timeMs: 0,
+        );
+        // Use backend's authoritative stars (overwrites local calculation)
+        if (mounted) {
+          setState(() {
+            _quizStars = result.stars;
+            _xpEarned = result.xpEarned;
+          });
+        }
+      } else {
+        // No quiz questions → still mark lesson as complete via progress endpoint
+        final score = _quizStars >= 3 ? 100.0 : _quizStars >= 2 ? 75.0 : 50.0;
+        await api.updateProgress(widget.lessonNumber, 'quiz', value: score);
+      }
+
+      dev.log('Lesson ${widget.lessonNumber} results submitted to backend (stars: $_quizStars)');
+    } catch (e) {
+      dev.log('Failed to submit lesson results: $e');
+      // Show feedback so user knows progress wasn't saved
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Progression non sauvegardée (hors ligne ?)'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   void _goBack() {
@@ -50,6 +107,13 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
     } else {
       context.pop();
     }
+  }
+
+  @override
+  void dispose() {
+    // Invalidate the lessons list so the map re-fetches with updated unlock states
+    ref.invalidate(medineV2LessonsProvider);
+    super.dispose();
   }
 
   @override
@@ -73,14 +137,22 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
             ],
           ),
         ),
-        data: (lesson) => _LessonBody(
-          lesson: lesson,
-          currentStep: _currentStep,
-          quizStars: _quizStars,
-          xpEarned: _xpEarned,
-          onNext: _nextStep,
-          onBack: _goBack,
-        ),
+        data: (lesson) {
+          _lesson = lesson;
+          return _LessonBody(
+            lesson: lesson,
+            currentStep: _currentStep,
+            quizStars: _quizStars,
+            xpEarned: _xpEarned,
+            onNext: _nextStep,
+            onBack: _goBack,
+            onExit: () {
+              ref.invalidate(medineV2LessonsProvider);
+              if (context.mounted) context.pop();
+            },
+            onQuizAnswer: _recordQuizAnswer,
+          );
+        },
       ),
     );
   }
@@ -93,6 +165,8 @@ class _LessonBody extends StatelessWidget {
   final int xpEarned;
   final void Function({int stars, int xp}) onNext;
   final VoidCallback onBack;
+  final VoidCallback onExit;
+  final void Function(String questionId, int selected) onQuizAnswer;
 
   const _LessonBody({
     required this.lesson,
@@ -101,6 +175,8 @@ class _LessonBody extends StatelessWidget {
     required this.xpEarned,
     required this.onNext,
     required this.onBack,
+    required this.onExit,
+    required this.onQuizAnswer,
   });
 
   @override
@@ -113,6 +189,7 @@ class _LessonBody extends StatelessWidget {
             currentStep: currentStep,
             lesson: lesson,
             onBack: onBack,
+            onExit: onExit,
           ),
 
         // Step content
@@ -156,6 +233,7 @@ class _LessonBody extends StatelessWidget {
         return QuizStep(
           key: const ValueKey('quiz'),
           lesson: lesson,
+          onAnswer: onQuizAnswer,
           onComplete: ({required int stars, required int xp}) =>
               onNext(stars: stars, xp: xp),
         );
@@ -176,11 +254,13 @@ class _ProgressBar extends StatelessWidget {
   final int currentStep;
   final LessonContentV2 lesson;
   final VoidCallback onBack;
+  final VoidCallback onExit;
 
   const _ProgressBar({
     required this.currentStep,
     required this.lesson,
     required this.onBack,
+    required this.onExit,
   });
 
   @override
@@ -242,7 +322,7 @@ class _ProgressBar extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              context.pop();
+              onExit();
             },
             child: const Text('Quitter', style: TextStyle(color: Color(0xFFC0392B))),
           ),

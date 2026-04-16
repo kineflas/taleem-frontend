@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/lesson_models_v2.dart';
 import '../../providers/lesson_provider_v2.dart';
 
 /// Step 6: Celebration and summary screen.
-class SummaryStep extends StatelessWidget {
+class SummaryStep extends ConsumerWidget {
   final LessonContentV2 lesson;
   final int stars;
   final int xpEarned;
@@ -17,7 +18,7 @@ class SummaryStep extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = partThemes[lesson.partNumber];
     final color = Color(theme?.color ?? 0xFF2D6A4F);
 
@@ -107,7 +108,12 @@ class SummaryStep extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      context.go('/medine/flashcards');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Révision par flashcards bientôt disponible !'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
                     },
                     icon: const Text('📇', style: TextStyle(fontSize: 18)),
                     label: const Text('Réviser'),
@@ -126,6 +132,8 @@ class SummaryStep extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
+                      // Invalidate so the map refreshes with unlocked lessons
+                      ref.invalidate(medineV2LessonsProvider);
                       if (lesson.lessonNumber < 23) {
                         context.go('/medine-v2/lesson/${lesson.lessonNumber + 1}');
                       } else {
@@ -156,7 +164,10 @@ class SummaryStep extends StatelessWidget {
 
             // Back to map
             TextButton(
-              onPressed: () => context.go('/student/medine-v2'),
+              onPressed: () {
+                ref.invalidate(medineV2LessonsProvider);
+                context.go('/student/medine-v2');
+              },
               child: const Text(
                 'Retour à la carte',
                 style: TextStyle(color: Color(0xFF999999)),

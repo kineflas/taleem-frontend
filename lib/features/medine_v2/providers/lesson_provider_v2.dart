@@ -48,7 +48,7 @@ final medineV2ApiProvider = Provider<MedineV2Api>(
   (ref) => MedineV2Api(ref.read(dioProvider)),
 );
 
-final medineV2LessonsProvider = FutureProvider<List<LessonListItemV2>>((ref) {
+final medineV2LessonsProvider = FutureProvider.autoDispose<List<LessonListItemV2>>((ref) {
   return ref.read(medineV2ApiProvider).fetchLessons();
 });
 
