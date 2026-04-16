@@ -48,6 +48,61 @@ class MedineV2Api {
         .map((j) => FlashcardGroupV2.fromJson(j as Map<String, dynamic>))
         .toList();
   }
+
+  /// Fetch boss quiz for a specific part.
+  Future<BossQuizContent> fetchBossQuiz(int partNumber) async {
+    final res = await _client.get('/api/v2/parts/$partNumber/quiz');
+    return BossQuizContent.fromJson(res.data);
+  }
+
+  /// Submit boss quiz answers.
+  Future<BossQuizResult> submitBossQuiz(
+    int partNumber, {
+    required List<Map<String, dynamic>> answers,
+    int timeMs = 0,
+  }) async {
+    final res = await _client.post(
+      '/api/v2/parts/$partNumber/quiz/submit',
+      data: {'answers': answers, 'time_ms': timeMs},
+    );
+    return BossQuizResult.fromJson(res.data);
+  }
+
+  /// Fetch the final exam.
+  Future<FinalExamContent> fetchFinalExam() async {
+    final res = await _client.get('/api/v2/exam');
+    return FinalExamContent.fromJson(res.data);
+  }
+
+  /// Submit final exam answers.
+  Future<BossQuizResult> submitFinalExam({
+    required List<Map<String, dynamic>> answers,
+    int timeMs = 0,
+  }) async {
+    final res = await _client.post(
+      '/api/v2/exam/submit',
+      data: {'answers': answers, 'time_ms': timeMs},
+    );
+    return BossQuizResult.fromJson(res.data);
+  }
+
+  /// Fetch the diagnostic placement test.
+  Future<DiagnosticContent> fetchDiagnostic() async {
+    final res = await _client.get('/api/v2/diagnostic');
+    return DiagnosticContent.fromJson(res.data);
+  }
+
+  /// Submit diagnostic answers.
+  Future<DiagnosticResult> submitDiagnostic({
+    required List<Map<String, dynamic>> answers,
+    int timeMs = 0,
+  }) async {
+    final res = await _client.post(
+      '/api/v2/diagnostic/submit',
+      data: {'answers': answers, 'time_ms': timeMs},
+    );
+    return DiagnosticResult.fromJson(res.data);
+  }
 }
 
 // ── Providers ───────────────────────────────────────────────────────────────
@@ -68,6 +123,21 @@ final medineV2LessonProvider =
 final medineV2FlashcardsProvider =
     FutureProvider.autoDispose<List<FlashcardGroupV2>>((ref) {
   return ref.read(medineV2ApiProvider).fetchFlashcards();
+});
+
+final medineV2BossQuizProvider =
+    FutureProvider.family<BossQuizContent, int>((ref, partNumber) {
+  return ref.read(medineV2ApiProvider).fetchBossQuiz(partNumber);
+});
+
+final medineV2FinalExamProvider =
+    FutureProvider.autoDispose<FinalExamContent>((ref) {
+  return ref.read(medineV2ApiProvider).fetchFinalExam();
+});
+
+final medineV2DiagnosticProvider =
+    FutureProvider.autoDispose<DiagnosticContent>((ref) {
+  return ref.read(medineV2ApiProvider).fetchDiagnostic();
 });
 
 /// Part number mapping

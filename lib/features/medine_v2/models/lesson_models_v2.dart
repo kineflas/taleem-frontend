@@ -359,6 +359,237 @@ class QuizResultV2 extends Equatable {
   List<Object?> get props => [score, total, correct, stars, xpEarned, results];
 }
 
+// ── Boss Quiz ──────────────────────────────────────────────────────────────
+
+class BossQuizContent extends Equatable {
+  final int partNumber;
+  final String title;
+  final List<int> lessonsCovered;
+  final int timeLimit;
+  final int passingScore;
+  final List<QuizQuestionV2> questions;
+
+  const BossQuizContent({
+    required this.partNumber,
+    required this.title,
+    this.lessonsCovered = const [],
+    this.timeLimit = 15,
+    this.passingScore = 70,
+    this.questions = const [],
+  });
+
+  factory BossQuizContent.fromJson(Map<String, dynamic> json) => BossQuizContent(
+        partNumber: json['part_number'] ?? 0,
+        title: json['title'] ?? '',
+        lessonsCovered: List<int>.from(json['lessons_covered'] ?? []),
+        timeLimit: json['time_limit'] ?? 15,
+        passingScore: json['passing_score'] ?? 70,
+        questions: (json['questions'] as List? ?? [])
+            .map((q) => QuizQuestionV2.fromJson(q))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [partNumber, title, lessonsCovered, timeLimit, passingScore, questions];
+}
+
+class BossQuizResult extends Equatable {
+  final double score;
+  final int total;
+  final int correct;
+  final int stars;
+  final int xpEarned;
+  final bool passed;
+  final List<Map<String, dynamic>> results;
+
+  const BossQuizResult({
+    required this.score,
+    required this.total,
+    required this.correct,
+    required this.stars,
+    required this.xpEarned,
+    required this.passed,
+    this.results = const [],
+  });
+
+  factory BossQuizResult.fromJson(Map<String, dynamic> json) => BossQuizResult(
+        score: (json['score'] as num?)?.toDouble() ?? 0,
+        total: json['total'] ?? 0,
+        correct: json['correct'] ?? 0,
+        stars: json['stars'] ?? 0,
+        xpEarned: json['xp_earned'] ?? 0,
+        passed: json['passed'] ?? false,
+        results: (json['results'] as List? ?? [])
+            .map((r) => Map<String, dynamic>.from(r))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [score, total, correct, stars, xpEarned, passed, results];
+}
+
+// ── Final Exam ─────────────────────────────────────────────────────────────
+
+class FinalExamContent extends Equatable {
+  final String examTitle;
+  final int timeLimit;
+  final int passingScore;
+  final int totalQuestions;
+  final List<QuizQuestionV2> questions;
+
+  const FinalExamContent({
+    required this.examTitle,
+    this.timeLimit = 25,
+    this.passingScore = 70,
+    this.totalQuestions = 10,
+    this.questions = const [],
+  });
+
+  factory FinalExamContent.fromJson(Map<String, dynamic> json) => FinalExamContent(
+        examTitle: json['exam_title'] ?? '',
+        timeLimit: json['time_limit'] ?? 25,
+        passingScore: json['passing_score'] ?? 70,
+        totalQuestions: json['total_questions'] ?? 10,
+        questions: (json['questions'] as List? ?? [])
+            .map((q) => QuizQuestionV2.fromJson(q))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [examTitle, timeLimit, passingScore, totalQuestions, questions];
+}
+
+// ── Diagnostic CAT ─────────────────────────────────────────────────────────
+
+class DiagnosticQuestion extends Equatable {
+  final String id;
+  final String lessonTarget;
+  final int difficulty;
+  final String skillTested;
+  final String question;
+  final List<String> options;
+  final int correct;
+  final String? explanation;
+  final String? adaptiveHint;
+
+  const DiagnosticQuestion({
+    required this.id,
+    this.lessonTarget = '',
+    this.difficulty = 1,
+    this.skillTested = '',
+    required this.question,
+    required this.options,
+    required this.correct,
+    this.explanation,
+    this.adaptiveHint,
+  });
+
+  factory DiagnosticQuestion.fromJson(Map<String, dynamic> json) => DiagnosticQuestion(
+        id: json['id']?.toString() ?? '',
+        lessonTarget: json['lesson_target'] ?? '',
+        difficulty: json['difficulty'] ?? 1,
+        skillTested: json['skill_tested'] ?? '',
+        question: json['question'] ?? '',
+        options: List<String>.from(json['options'] ?? []),
+        correct: json['correct'] ?? 0,
+        explanation: json['explanation'],
+        adaptiveHint: json['adaptive_hint'],
+      );
+
+  @override
+  List<Object?> get props => [id, lessonTarget, difficulty, skillTested, question, options, correct];
+}
+
+class DiagnosticContent extends Equatable {
+  final String testName;
+  final int totalQuestions;
+  final String estimatedTime;
+  final List<DiagnosticQuestion> questions;
+
+  const DiagnosticContent({
+    required this.testName,
+    this.totalQuestions = 10,
+    this.estimatedTime = '10-12 minutes',
+    this.questions = const [],
+  });
+
+  factory DiagnosticContent.fromJson(Map<String, dynamic> json) => DiagnosticContent(
+        testName: json['test_name'] ?? '',
+        totalQuestions: json['total_questions'] ?? 10,
+        estimatedTime: json['estimated_time'] ?? '10-12 minutes',
+        questions: (json['questions'] as List? ?? [])
+            .map((q) => DiagnosticQuestion.fromJson(q))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [testName, totalQuestions, estimatedTime, questions];
+}
+
+class CompetencyScore extends Equatable {
+  final String id;
+  final String name;
+  final double score;
+
+  const CompetencyScore({
+    required this.id,
+    required this.name,
+    required this.score,
+  });
+
+  factory CompetencyScore.fromJson(Map<String, dynamic> json) => CompetencyScore(
+        id: json['id'] ?? '',
+        name: json['name'] ?? '',
+        score: (json['score'] as num?)?.toDouble() ?? 0,
+      );
+
+  @override
+  List<Object?> get props => [id, name, score];
+}
+
+class DiagnosticResult extends Equatable {
+  final double score;
+  final int total;
+  final int correct;
+  final String level;
+  final int startAtLesson;
+  final int startAtPart;
+  final String message;
+  final List<CompetencyScore> competencies;
+  final List<Map<String, dynamic>> results;
+
+  const DiagnosticResult({
+    required this.score,
+    required this.total,
+    required this.correct,
+    required this.level,
+    required this.startAtLesson,
+    required this.startAtPart,
+    required this.message,
+    this.competencies = const [],
+    this.results = const [],
+  });
+
+  factory DiagnosticResult.fromJson(Map<String, dynamic> json) => DiagnosticResult(
+        score: (json['score'] as num?)?.toDouble() ?? 0,
+        total: json['total'] ?? 0,
+        correct: json['correct'] ?? 0,
+        level: json['level'] ?? '',
+        startAtLesson: json['start_at_lesson'] ?? 1,
+        startAtPart: json['start_at_part'] ?? 1,
+        message: json['message'] ?? '',
+        competencies: (json['competencies'] as List? ?? [])
+            .map((c) => CompetencyScore.fromJson(c))
+            .toList(),
+        results: (json['results'] as List? ?? [])
+            .map((r) => Map<String, dynamic>.from(r))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [score, total, correct, level, startAtLesson, startAtPart, message, competencies, results];
+}
+
 // ── Flashcard Group V2 (for review endpoint) ──────────────────────────────
 
 class FlashcardGroupV2 extends Equatable {

@@ -88,6 +88,32 @@ class _MapBody extends StatelessWidget {
           ),
         ),
 
+        // ── Diagnostic banner ───────────────────────────────────────
+        SliverToBoxAdapter(
+          child: GestureDetector(
+            onTap: () => context.push('/medine-v2/diagnostic'),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                color: Color(0xFF2A9D8F),
+              ),
+              child: const Row(
+                children: [
+                  Text('🎯', style: TextStyle(fontSize: 18)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Test de placement',
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  Spacer(),
+                  Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 14),
+                ],
+              ),
+            ),
+          ),
+        ),
+
         // ── HUD bar ─────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: Container(
@@ -174,6 +200,13 @@ class _MapBody extends StatelessWidget {
               );
             },
             childCount: partNumbers.length,
+          ),
+        ),
+
+        // Final exam node (visible when all parts are done)
+        SliverToBoxAdapter(
+          child: _FinalExamNode(
+            allCompleted: completed == lessons.length,
           ),
         ),
 
@@ -314,6 +347,13 @@ class _ExpandedPart extends StatelessWidget {
             partColor: baseColor,
           );
         }),
+
+        // Boss quiz node at end of part
+        _BossQuizNode(
+          partNumber: partNumber,
+          partColor: baseColor,
+          allCompleted: completedInPart == lessons.length,
+        ),
       ],
     );
   }
@@ -439,6 +479,140 @@ class _LockedPartCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Boss Quiz Node ──────────────────────────────────────────────────────────
+
+class _BossQuizNode extends StatelessWidget {
+  final int partNumber;
+  final Color partColor;
+  final bool allCompleted;
+
+  const _BossQuizNode({
+    required this.partNumber,
+    required this.partColor,
+    required this.allCompleted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLocked = !allCompleted;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
+      child: GestureDetector(
+        onTap: isLocked ? null : () => context.push('/medine-v2/boss-quiz/$partNumber'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isLocked ? Colors.grey.shade100 : partColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isLocked ? Colors.grey.shade300 : partColor,
+              width: isLocked ? 1 : 2,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isLocked ? Icons.lock_outline : Icons.emoji_events,
+                color: isLocked ? Colors.grey.shade400 : partColor,
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Boss Quiz — Étape $partNumber',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isLocked ? Colors.grey.shade500 : partColor,
+                ),
+              ),
+              if (!isLocked) ...[
+                const SizedBox(width: 8),
+                Icon(Icons.arrow_forward_ios, size: 14, color: partColor.withOpacity(0.6)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Final Exam Node ─────────────────────────────────────────────────────────
+
+class _FinalExamNode extends StatelessWidget {
+  final bool allCompleted;
+
+  const _FinalExamNode({required this.allCompleted});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF1B4332);
+    final isLocked = !allCompleted;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
+      child: GestureDetector(
+        onTap: isLocked ? null : () => context.push('/medine-v2/exam'),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: isLocked
+                ? null
+                : const LinearGradient(
+                    colors: [Color(0xFF1B4332), Color(0xFF2D6A4F)],
+                  ),
+            color: isLocked ? Colors.grey.shade100 : null,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isLocked ? Colors.grey.shade300 : color,
+              width: isLocked ? 1 : 2,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isLocked ? Icons.lock_outline : Icons.school,
+                color: isLocked ? Colors.grey.shade400 : Colors.white,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Examen Final — Tome 1',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isLocked ? Colors.grey.shade500 : Colors.white,
+                    ),
+                  ),
+                  Text(
+                    isLocked
+                        ? 'Termine toutes les leçons pour débloquer'
+                        : '10 questions • Synthèse complète',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isLocked ? Colors.grey.shade400 : Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+              if (!isLocked) ...[
+                const Spacer(),
+                const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

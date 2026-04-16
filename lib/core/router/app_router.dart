@@ -39,6 +39,9 @@ import '../../features/medine/screens/gamification_screen.dart';
 import '../../features/medine_v2/screens/caravane_map_screen.dart';
 import '../../features/medine_v2/screens/lesson_flow_screen.dart';
 import '../../features/medine_v2/screens/flashcard_review_screen_v2.dart';
+import '../../features/medine_v2/screens/boss_quiz_screen.dart';
+import '../../features/medine_v2/screens/final_exam_screen.dart';
+import '../../features/medine_v2/screens/diagnostic_screen_v2.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -148,6 +151,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/medine-v2/flashcards',
         builder: (_, __) => const FlashcardReviewScreenV2(),
+      ),
+      GoRoute(
+        path: '/medine-v2/boss-quiz/:partNumber',
+        builder: (ctx, state) => BossQuizScreen(
+          partNumber: int.parse(state.pathParameters['partNumber']!),
+        ),
+      ),
+      GoRoute(
+        path: '/medine-v2/exam',
+        builder: (_, __) => const FinalExamScreen(),
+      ),
+      GoRoute(
+        path: '/medine-v2/diagnostic',
+        builder: (_, __) => const DiagnosticScreenV2(),
       ),
 
       // Curriculum deep routes (outside shell — full screen)

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../models/lesson_models_v2.dart';
 import '../providers/lesson_provider_v2.dart';
+import 'steps/completed_lesson_entry.dart';
 import 'steps/objective_step.dart';
 import 'steps/discovery_step.dart';
 import 'steps/dialogue_step.dart';
@@ -22,10 +23,13 @@ class LessonFlowScreen extends ConsumerStatefulWidget {
 }
 
 class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
+  /// -1 = completed lesson entry screen, 0..5 = normal flow
   int _currentStep = 0;
   int _quizStars = 0;
   int _xpEarned = 0;
+  int _existingStars = 0;
   LessonContentV2? _lesson;
+  bool _checkedCompletion = false;
 
   static const _stepLabels = [
     'Objectif',
@@ -139,6 +143,35 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
         ),
         data: (lesson) {
           _lesson = lesson;
+
+          // Check if lesson is already completed (once)
+          if (!_checkedCompletion) {
+            _checkedCompletion = true;
+            final lessonsState = ref.read(medineV2LessonsProvider);
+            lessonsState.whenData((lessons) {
+              final item = lessons.where((l) => l.lessonNumber == widget.lessonNumber).firstOrNull;
+              if (item != null && item.isCompleted) {
+                // Show completed entry screen
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() {
+                    _currentStep = -1;
+                    _existingStars = item.stars;
+                  });
+                });
+              }
+            });
+          }
+
+          // Completed lesson entry screen
+          if (_currentStep == -1) {
+            return CompletedLessonEntry(
+              lesson: lesson,
+              stars: _existingStars,
+              onReviewLesson: () => setState(() => _currentStep = 0),
+              onTakeQuiz: () => setState(() => _currentStep = 4),
+            );
+          }
+
           return _LessonBody(
             lesson: lesson,
             currentStep: _currentStep,
