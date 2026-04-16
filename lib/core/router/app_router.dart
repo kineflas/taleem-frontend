@@ -38,6 +38,7 @@ import '../../features/medine/screens/diagnostic_screen.dart';
 import '../../features/medine/screens/gamification_screen.dart';
 import '../../features/medine_v2/screens/caravane_map_screen.dart';
 import '../../features/medine_v2/screens/lesson_flow_screen.dart';
+import '../../features/medine_v2/screens/flashcard_review_screen_v2.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -143,6 +144,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (ctx, state) => LessonFlowScreen(
           lessonNumber: int.parse(state.pathParameters['lessonNumber']!),
         ),
+      ),
+      GoRoute(
+        path: '/medine-v2/flashcards',
+        builder: (_, __) => const FlashcardReviewScreenV2(),
       ),
 
       // Curriculum deep routes (outside shell — full screen)

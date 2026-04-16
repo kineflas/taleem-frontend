@@ -108,12 +108,7 @@ class SummaryStep extends ConsumerWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Révision par flashcards bientôt disponible !'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
+                      context.go('/medine-v2/flashcards');
                     },
                     icon: const Text('📇', style: TextStyle(fontSize: 18)),
                     label: const Text('Réviser'),

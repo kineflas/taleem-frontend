@@ -40,6 +40,14 @@ class MedineV2Api {
     );
     return QuizResultV2.fromJson(res.data);
   }
+
+  /// Fetch flashcards from all completed lessons for review.
+  Future<List<FlashcardGroupV2>> fetchFlashcards() async {
+    final res = await _client.get('/api/v2/flashcards');
+    return (res.data as List)
+        .map((j) => FlashcardGroupV2.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
 }
 
 // ── Providers ───────────────────────────────────────────────────────────────
@@ -55,6 +63,11 @@ final medineV2LessonsProvider = FutureProvider.autoDispose<List<LessonListItemV2
 final medineV2LessonProvider =
     FutureProvider.family<LessonContentV2, int>((ref, lessonNumber) {
   return ref.read(medineV2ApiProvider).fetchLesson(lessonNumber);
+});
+
+final medineV2FlashcardsProvider =
+    FutureProvider.autoDispose<List<FlashcardGroupV2>>((ref) {
+  return ref.read(medineV2ApiProvider).fetchFlashcards();
 });
 
 /// Part number mapping

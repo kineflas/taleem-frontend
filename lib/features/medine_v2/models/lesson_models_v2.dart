@@ -181,7 +181,7 @@ class QuizQuestionV2 extends Equatable {
   });
 
   factory QuizQuestionV2.fromJson(Map<String, dynamic> json) => QuizQuestionV2(
-        id: json['id'] ?? '',
+        id: json['id']?.toString() ?? '',
         question: json['question'] ?? '',
         options: List<String>.from(json['options'] ?? []),
         correct: json['correct'] ?? 0,
@@ -357,4 +357,33 @@ class QuizResultV2 extends Equatable {
 
   @override
   List<Object?> get props => [score, total, correct, stars, xpEarned, results];
+}
+
+// ── Flashcard Group V2 (for review endpoint) ──────────────────────────────
+
+class FlashcardGroupV2 extends Equatable {
+  final int lessonNumber;
+  final String titleFr;
+  final int partNumber;
+  final List<FlashcardV2> cards;
+
+  const FlashcardGroupV2({
+    required this.lessonNumber,
+    required this.titleFr,
+    required this.partNumber,
+    this.cards = const [],
+  });
+
+  factory FlashcardGroupV2.fromJson(Map<String, dynamic> json) =>
+      FlashcardGroupV2(
+        lessonNumber: json['lesson_number'] ?? 0,
+        titleFr: json['title_fr'] ?? '',
+        partNumber: json['part_number'] ?? 1,
+        cards: (json['cards'] as List? ?? [])
+            .map((c) => FlashcardV2.fromJson(c as Map<String, dynamic>))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [lessonNumber, titleFr, partNumber, cards];
 }
