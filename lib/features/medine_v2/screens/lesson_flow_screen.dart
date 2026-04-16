@@ -149,7 +149,8 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
             _checkedCompletion = true;
             final lessonsState = ref.read(medineV2LessonsProvider);
             lessonsState.whenData((lessons) {
-              final item = lessons.where((l) => l.lessonNumber == widget.lessonNumber).firstOrNull;
+              final matches = lessons.where((l) => l.lessonNumber == widget.lessonNumber);
+              final item = matches.isEmpty ? null : matches.first;
               if (item != null && item.isCompleted) {
                 // Show completed entry screen
                 WidgetsBinding.instance.addPostFrameCallback((_) {
