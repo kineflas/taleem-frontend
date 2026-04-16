@@ -6,6 +6,9 @@ import '../models/lesson_models_v2.dart';
 import '../providers/lesson_provider_v2.dart';
 
 /// Main map screen showing the 23 lessons as a scrollable journey path.
+/// - Completed parts: shown fully (lessons visible)
+/// - Current part: shown fully with lesson nodes
+/// - Future parts: collapsed preview (title + lesson count + lock)
 class CaravaneMapScreen extends ConsumerWidget {
   const CaravaneMapScreen({super.key});
 
@@ -24,15 +27,46 @@ class CaravaneMapScreen extends ConsumerWidget {
   }
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/// Group lessons by part number, preserving order.
+Map<int, List<LessonListItemV2>> _groupByPart(List<LessonListItemV2> lessons) {
+  final map = <int, List<LessonListItemV2>>{};
+  for (final l in lessons) {
+    map.putIfAbsent(l.partNumber, () => []).add(l);
+  }
+  return map;
+}
+
+/// Determine the "active" part = the part containing the first unlocked-but-not-completed lesson.
+/// If all lessons are completed, returns the last part.
+int _activePart(List<LessonListItemV2> lessons) {
+  for (final l in lessons) {
+    if (l.isUnlocked && !l.isCompleted) return l.partNumber;
+  }
+  // All completed → last part
+  return lessons.isNotEmpty ? lessons.last.partNumber : 1;
+}
+
+// ── Map Body ────────────────────────────────────────────────────────────────
+
 class _MapBody extends StatelessWidget {
   final List<LessonListItemV2> lessons;
   const _MapBody({required this.lessons});
 
   @override
   Widget build(BuildContext context) {
+    final grouped = _groupByPart(lessons);
+    final currentPart = _activePart(lessons);
+    final partNumbers = grouped.keys.toList()..sort();
+
+    // Calculate overall progress
+    final completed = lessons.where((l) => l.isCompleted).length;
+    final totalStars = lessons.fold<int>(0, (s, l) => s + l.stars);
+
     return CustomScrollView(
       slivers: [
-        // App bar with stats HUD
+        // ── App bar ─────────────────────────────────────────────────
         SliverAppBar(
           expandedHeight: 120,
           pinned: true,
@@ -54,42 +88,92 @@ class _MapBody extends StatelessWidget {
           ),
         ),
 
-        // HUD bar
+        // ── HUD bar ─────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             color: const Color(0xFF2D6A4F),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _HudItem(icon: '🔥', label: '0', subtitle: 'Streak'),
-                _HudItem(icon: '⭐', label: '0', subtitle: 'XP'),
-                _HudItem(icon: '💎', label: '3/3', subtitle: 'Jokers'),
+                const _HudItem(icon: '🔥', label: '0', subtitle: 'Streak'),
+                _HudItem(icon: '⭐', label: '$totalStars', subtitle: 'Étoiles'),
+                _HudItem(icon: '📖', label: '$completed/${lessons.length}', subtitle: 'Leçons'),
               ],
             ),
           ),
         ),
 
-        // Lessons path
+        // ── Overall progress bar ────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Progression',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${(completed / lessons.length * 100).round()} %',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: lessons.isEmpty ? 0 : completed / lessons.length,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2D6A4F)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Parts ───────────────────────────────────────────────────
         SliverList(
           delegate: SliverChildBuilderDelegate(
             (context, index) {
-              // Group lessons by part
-              if (index >= lessons.length) return null;
-              final lesson = lessons[index];
+              final partNum = partNumbers[index];
+              final partLessons = grouped[partNum]!;
+              final theme = partThemes[partNum];
+              final isFuturePart = partNum > currentPart;
 
-              // Part separator
-              final showPartHeader = index == 0 ||
-                  lesson.partNumber != lessons[index - 1].partNumber;
+              if (isFuturePart) {
+                return _LockedPartCard(
+                  partNumber: partNum,
+                  lessonCount: partLessons.length,
+                  theme: theme,
+                );
+              }
 
-              return Column(
-                children: [
-                  if (showPartHeader) _PartHeader(lesson: lesson),
-                  _LessonNode(lesson: lesson, index: index),
-                ],
+              // Current or completed part → show full lessons
+              return _ExpandedPart(
+                partNumber: partNum,
+                lessons: partLessons,
+                theme: theme,
+                isCurrentPart: partNum == currentPart,
+                globalLessons: lessons,
               );
             },
-            childCount: lessons.length,
+            childCount: partNumbers.length,
           ),
         ),
 
@@ -99,6 +183,8 @@ class _MapBody extends StatelessWidget {
     );
   }
 }
+
+// ── HUD Item ────────────────────────────────────────────────────────────────
 
 class _HudItem extends StatelessWidget {
   final String icon;
@@ -126,48 +212,230 @@ class _HudItem extends StatelessWidget {
   }
 }
 
-class _PartHeader extends StatelessWidget {
-  final LessonListItemV2 lesson;
-  const _PartHeader({required this.lesson});
+// ── Expanded Part (current or completed) ────────────────────────────────────
+
+class _ExpandedPart extends StatelessWidget {
+  final int partNumber;
+  final List<LessonListItemV2> lessons;
+  final PartTheme? theme;
+  final bool isCurrentPart;
+  final List<LessonListItemV2> globalLessons;
+
+  const _ExpandedPart({
+    required this.partNumber,
+    required this.lessons,
+    required this.theme,
+    required this.isCurrentPart,
+    required this.globalLessons,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = partThemes[lesson.partNumber];
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        color: Color(theme?.color ?? 0xFF2D6A4F).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Color(theme?.color ?? 0xFF2D6A4F).withOpacity(0.3),
+    final baseColor = Color(theme?.color ?? 0xFF2D6A4F);
+    final completedInPart = lessons.where((l) => l.isCompleted).length;
+
+    return Column(
+      children: [
+        // Part header
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 24, 16, 4),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            color: baseColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: baseColor.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Text(theme?.icon ?? '📖', style: const TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Étape $partNumber',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: baseColor,
+                      ),
+                    ),
+                    Text(
+                      theme?.name ?? 'Partie $partNumber',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A2E),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Mini progress for this part
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: lessons.isEmpty ? 0 : completedInPart / lessons.length,
+                              minHeight: 4,
+                              backgroundColor: baseColor.withOpacity(0.15),
+                              valueColor: AlwaysStoppedAnimation<Color>(baseColor),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$completedInPart/${lessons.length}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: baseColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
+
+        // Lesson nodes
+        ...lessons.asMap().entries.map((entry) {
+          final i = entry.key;
+          final lesson = entry.value;
+          // Global index for alternating layout
+          final globalIdx = globalLessons.indexOf(lesson);
+          return _LessonNode(
+            lesson: lesson,
+            index: globalIdx >= 0 ? globalIdx : i,
+            partColor: baseColor,
+          );
+        }),
+      ],
+    );
+  }
+}
+
+// ── Locked Part Card (future parts) ─────────────────────────────────────────
+
+class _LockedPartCard extends StatelessWidget {
+  final int partNumber;
+  final int lessonCount;
+  final PartTheme? theme;
+
+  const _LockedPartCard({
+    required this.partNumber,
+    required this.lessonCount,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final baseColor = Color(theme?.color ?? 0xFF2D6A4F);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Text(theme?.icon ?? '📖', style: const TextStyle(fontSize: 28)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Header row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Row(
               children: [
-                Text(
-                  'Étape ${lesson.partNumber}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(theme?.color ?? 0xFF2D6A4F),
+                // Icon in a faded circle
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: baseColor.withOpacity(0.08),
+                  ),
+                  child: Center(
+                    child: Text(
+                      theme?.icon ?? '📖',
+                      style: const TextStyle(fontSize: 24),
+                    ),
                   ),
                 ),
-                Text(
-                  theme?.name ?? lesson.partName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Étape $partNumber',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        theme?.name ?? 'Partie $partNumber',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Lock badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_outline, size: 14, color: Colors.grey.shade500),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$lessonCount leçons',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // Subtle bottom hint
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: baseColor.withOpacity(0.04),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(15),
+                bottomRight: Radius.circular(15),
+              ),
+            ),
+            child: Text(
+              'Termine les étapes précédentes pour débloquer',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey.shade500,
+              ),
             ),
           ),
         ],
@@ -176,15 +444,21 @@ class _PartHeader extends StatelessWidget {
   }
 }
 
+// ── Lesson Node ─────────────────────────────────────────────────────────────
+
 class _LessonNode extends StatelessWidget {
   final LessonListItemV2 lesson;
   final int index;
-  const _LessonNode({required this.lesson, required this.index});
+  final Color partColor;
+
+  const _LessonNode({
+    required this.lesson,
+    required this.index,
+    required this.partColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final theme = partThemes[lesson.partNumber];
-    final baseColor = Color(theme?.color ?? 0xFF2D6A4F);
     final isLocked = !lesson.isUnlocked;
     final isCompleted = lesson.isCompleted;
 
@@ -197,11 +471,6 @@ class _LessonNode extends StatelessWidget {
         children: [
           if (!isLeft) const Spacer(flex: 2),
           if (isLeft) const SizedBox(width: 32),
-          // Connecting line
-          if (index > 0)
-            Positioned(
-              child: Container(width: 2, height: 20, color: baseColor.withOpacity(0.3)),
-            ),
           // Node
           Expanded(
             flex: 3,
@@ -216,20 +485,20 @@ class _LessonNode extends StatelessWidget {
                   color: isLocked
                       ? Colors.grey.shade200
                       : isCompleted
-                          ? baseColor.withOpacity(0.15)
+                          ? partColor.withOpacity(0.15)
                           : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isLocked
                         ? Colors.grey.shade300
-                        : baseColor,
+                        : partColor,
                     width: isCompleted ? 2 : 1,
                   ),
                   boxShadow: isLocked
                       ? []
                       : [
                           BoxShadow(
-                            color: baseColor.withOpacity(0.15),
+                            color: partColor.withOpacity(0.15),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -246,8 +515,8 @@ class _LessonNode extends StatelessWidget {
                         color: isLocked
                             ? Colors.grey.shade300
                             : isCompleted
-                                ? baseColor
-                                : baseColor.withOpacity(0.1),
+                                ? partColor
+                                : partColor.withOpacity(0.1),
                       ),
                       child: Center(
                         child: isLocked
@@ -259,7 +528,7 @@ class _LessonNode extends StatelessWidget {
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: baseColor,
+                                      color: partColor,
                                     ),
                                   ),
                       ),
@@ -274,7 +543,7 @@ class _LessonNode extends StatelessWidget {
                             'Leçon ${lesson.lessonNumber}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isLocked ? Colors.grey : baseColor,
+                              color: isLocked ? Colors.grey : partColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -307,7 +576,7 @@ class _LessonNode extends StatelessWidget {
                       ),
                     ),
                     if (!isLocked && !isCompleted)
-                      Icon(Icons.play_circle_fill, color: baseColor, size: 32),
+                      Icon(Icons.play_circle_fill, color: partColor, size: 32),
                   ],
                 ),
               ),
