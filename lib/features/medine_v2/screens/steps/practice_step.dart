@@ -372,12 +372,14 @@ List<String> _extractOptionsFromPrompt(String? prompt) {
   final arabicRe = RegExp(r'[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]');
   final options = <String>[];
   for (final p in parts) {
-    final trimmed = p.trim();
+    // Strip parentheses and tatweel (kashida) before processing
+    final trimmed = p.trim().replaceAll(RegExp(r'[()（）]'), '').trim();
     if (trimmed.isNotEmpty && arabicRe.hasMatch(trimmed)) {
       // Extract just the Arabic portion if mixed with French
       final arabicOnly = trimmed
           .split(' ')
           .where((w) => arabicRe.hasMatch(w))
+          .map((w) => w.replaceAll('\u0640', '')) // Remove tatweel/kashida
           .join(' ')
           .trim();
       if (arabicOnly.isNotEmpty) options.add(arabicOnly);
@@ -491,7 +493,14 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
   }
 
   void _check() {
+    // When no options were extracted, there's nothing to select —
+    // treat as self-check and advance automatically.
+    if (_selectedOption == null && _options.isEmpty) {
+      _advanceAfterDelay(true);
+      return;
+    }
     if (_selectedOption == null) return;
+
     final answer = _getCorrectAnswer();
 
     if (answer.isEmpty) {
