@@ -77,6 +77,18 @@ class CurriculumLibraryScreen extends ConsumerWidget {
                       ),
                     );
                   }),
+                  // Add Odyssée des Lettres in "Apprendre à lire"
+                  if (cat == ProgramCategory.apprendreALire) ...[
+                    _FeatureCard(
+                      icon: '✨',
+                      titleFr: "L'Odyssée des Lettres",
+                      titleAr: 'رحلة الحروف',
+                      subtitleFr: '18 leçons : apprends les 28 lettres arabes pas à pas',
+                      color: const Color(0xFF2A9D8F),
+                      onTap: () => context.go('/student/odyssee'),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   // Add Medine V2 feature card in "Comprendre l'arabe"
                   if (cat == ProgramCategory.comprendreArabe) ...[
                     _FeatureCard(
