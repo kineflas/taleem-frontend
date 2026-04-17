@@ -37,31 +37,6 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # ── Backend API: proxy all /api/ calls ──
-    location /api/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        client_max_body_size 20M;
-    }
-
-    # ── Admin pages: proxy to backend ──
-    location /admin/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # ── Static audio files: proxy to backend ──
-    location /static/audio/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host $host;
-    }
-
     # SPA fallback
     location / {
         try_files $uri $uri/ /index.html;
