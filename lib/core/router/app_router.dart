@@ -42,6 +42,8 @@ import '../../features/medine_v2/screens/flashcard_review_screen_v2.dart';
 import '../../features/medine_v2/screens/boss_quiz_screen.dart';
 import '../../features/medine_v2/screens/final_exam_screen.dart';
 import '../../features/medine_v2/screens/diagnostic_screen_v2.dart';
+import '../../features/odyssee_lettres/screens/odyssee_map_screen.dart';
+import '../../features/odyssee_lettres/screens/odyssee_lesson_flow_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -117,6 +119,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/student/hifz', builder: (_, __) => const HifzHubScreen()),
           GoRoute(path: '/student/medine', builder: (_, __) => const LessonListScreen()),
           GoRoute(path: '/student/medine-v2', builder: (_, __) => const CaravaneMapScreen()),
+          GoRoute(path: '/student/odyssee', builder: (_, __) => const OdysseeMapScreen()),
           GoRoute(path: '/student/settings', builder: (_, __) => const StudentSettingsScreen()),
         ],
       ),
@@ -165,6 +168,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/medine-v2/diagnostic',
         builder: (_, __) => const DiagnosticScreenV2(),
+      ),
+
+      // Odyssée des Lettres deep routes (full screen)
+      GoRoute(
+        path: '/odyssee/lesson/:lessonNumber',
+        builder: (ctx, state) => OdysseeLessonFlowScreen(
+          lessonNumber: int.parse(state.pathParameters['lessonNumber']!),
+        ),
       ),
 
       // Curriculum deep routes (outside shell — full screen)
