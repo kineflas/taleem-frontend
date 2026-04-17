@@ -130,7 +130,9 @@ class SummaryStep extends ConsumerWidget {
                       // Invalidate so the map refreshes with unlocked lessons
                       ref.invalidate(medineV2LessonsProvider);
                       if (lesson.lessonNumber < 23) {
-                        context.go('/medine-v2/lesson/${lesson.lessonNumber + 1}');
+                        // Replace current lesson with next (pop current, push next)
+                        context.pop();
+                        context.push('/medine-v2/lesson/${lesson.lessonNumber + 1}');
                       } else {
                         context.go('/student/medine-v2');
                       }
