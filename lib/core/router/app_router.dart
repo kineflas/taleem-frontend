@@ -31,6 +31,9 @@ import '../../features/hifz/screens/hifz_goal_create_screen.dart';
 import '../../features/hifz/screens/hifz_session_screen.dart';
 import '../../features/hifz/screens/hifz_revision_screen.dart';
 import '../../features/hifz/screens/surah_heatmap_screen.dart';
+import '../../features/hifz_v2/screens/wird_session_screen.dart';
+import '../../features/hifz_v2/screens/wird_verse_flow_screen.dart';
+import '../../features/hifz_v2/models/wird_models.dart';
 import '../../features/medine/screens/lesson_list_screen.dart';
 import '../../features/medine/screens/lesson_detail_screen.dart';
 import '../../features/medine/screens/flashcard_review_screen.dart';
@@ -291,6 +294,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           surahNumber: int.parse(state.pathParameters['surahNumber']!),
           surahName: state.uri.queryParameters['name'] ?? 'Surah',
         ),
+      ),
+
+      // Hifz V2 — Wird session (full screen)
+      GoRoute(
+        path: '/hifz-v2/wird',
+        builder: (ctx, state) {
+          final session = state.extra as WirdSession;
+          return WirdSessionScreen(session: session);
+        },
       ),
     ],
     errorBuilder: (_, state) => Scaffold(

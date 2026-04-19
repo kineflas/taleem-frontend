@@ -80,6 +80,23 @@ class ApiConstants {
   static String diagnosticAnswer(String id) => '/api/diagnostic/$id/answer';
   static String diagnosticResult(String id) => '/api/diagnostic/$id/result';
 
+  // ASR (Quran Recitation Validator)
+  static const String asrBaseUrl = String.fromEnvironment(
+    'ASR_BASE_URL',
+    defaultValue: 'https://asr.taleem.cksyndic.ma',
+  );
+  static const String asrValidate = '/api/validate';
+  static const String asrValidateReplay = '/api/validate-replay';
+  static const String asrTranscribe = '/api/transcribe';
+  static const String asrFindVerse = '/api/find-verse';
+  static const String asrHealth = '/api/health';
+
+  // Hifz V2 — Wird
+  static const String studentHifzWirdToday = '/student/hifz/wird/today';
+  static const String studentHifzWirdStart = '/student/hifz/wird/start';
+  static const String studentHifzExerciseAnswer = '/student/hifz/exercises/answer';
+  static String studentHifzSurahContent(int n) => '/student/hifz/surah/$n/content';
+
   // Medine V2
   static const String lessonsV2 = '/api/v2/lessons';
   static String lessonV2Detail(int n) => '/api/v2/lessons/$n';
