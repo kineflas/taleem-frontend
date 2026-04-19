@@ -12,15 +12,34 @@ class HifzV2Service {
 
   // ── Wird ─────────────────────────────────────────────────────────
 
+  /// Récupère les sourates suggérées pour l'écran Ikhtiar.
+  Future<SuggestedSurahsResponse> fetchSuggestedSurahs() async {
+    final response = await _dio.get(ApiConstants.studentHifzSurahsSuggested);
+    return SuggestedSurahsResponse.fromJson(
+        response.data as Map<String, dynamic>);
+  }
+
   /// Récupère le Wird du jour (composé par l'algorithme backend).
-  Future<WirdTodayResponse> fetchWirdToday() async {
-    final response = await _dio.get(ApiConstants.studentHifzWirdToday);
+  /// Si [surahNumber] est fourni, le Wird ciblera cette sourate.
+  Future<WirdTodayResponse> fetchWirdToday({int? surahNumber}) async {
+    final response = await _dio.get(
+      ApiConstants.studentHifzWirdToday,
+      queryParameters: {
+        if (surahNumber != null) 'surah_number': surahNumber,
+      },
+    );
     return WirdTodayResponse.fromJson(response.data as Map<String, dynamic>);
   }
 
   /// Démarre (ou reprend) le Wird du jour. Retourne l'ID de session.
-  Future<String> startWird() async {
-    final response = await _dio.post(ApiConstants.studentHifzWirdStart);
+  /// Si [surahNumber] est fourni, le Wird ciblera cette sourate.
+  Future<String> startWird({int? surahNumber}) async {
+    final response = await _dio.post(
+      ApiConstants.studentHifzWirdStart,
+      data: {
+        if (surahNumber != null) 'surah_number': surahNumber,
+      },
+    );
     return response.data['id'] as String;
   }
 
@@ -406,6 +425,74 @@ class SurahMapEntry {
         averageScore: (json['average_score'] as num?)?.toDouble() ?? 0.0,
         isCompleted: json['is_completed'] as bool? ?? false,
         hasGoal: json['has_goal'] as bool? ?? false,
+      );
+}
+
+class SuggestedSurah {
+  SuggestedSurah({
+    required this.surahNumber,
+    required this.nameAr,
+    required this.nameFr,
+    required this.totalVerses,
+    this.versesStarted = 0,
+    this.versesRemaining = 0,
+    this.nextVerse = 1,
+    this.averageScore = 0.0,
+    this.hasReviewDue = false,
+    this.reviewCount = 0,
+    this.reason = '',
+  });
+
+  final int surahNumber;
+  final String nameAr;
+  final String nameFr;
+  final int totalVerses;
+  final int versesStarted;
+  final int versesRemaining;
+  final int nextVerse;
+  final double averageScore;
+  final bool hasReviewDue;
+  final int reviewCount;
+  final String reason;
+
+  factory SuggestedSurah.fromJson(Map<String, dynamic> json) => SuggestedSurah(
+        surahNumber: json['surah_number'] as int,
+        nameAr: json['name_ar'] as String? ?? '',
+        nameFr: json['name_fr'] as String? ?? '',
+        totalVerses: json['total_verses'] as int,
+        versesStarted: json['verses_started'] as int? ?? 0,
+        versesRemaining: json['verses_remaining'] as int? ?? 0,
+        nextVerse: json['next_verse'] as int? ?? 1,
+        averageScore: (json['average_score'] as num?)?.toDouble() ?? 0.0,
+        hasReviewDue: json['has_review_due'] as bool? ?? false,
+        reviewCount: json['review_count'] as int? ?? 0,
+        reason: json['reason'] as String? ?? '',
+      );
+}
+
+class SuggestedSurahsResponse {
+  SuggestedSurahsResponse({
+    this.currentSurah,
+    this.suggestions = const [],
+    this.reviewDueSurahs = const [],
+  });
+
+  final SuggestedSurah? currentSurah;
+  final List<SuggestedSurah> suggestions;
+  final List<SuggestedSurah> reviewDueSurahs;
+
+  factory SuggestedSurahsResponse.fromJson(Map<String, dynamic> json) =>
+      SuggestedSurahsResponse(
+        currentSurah: json['current_surah'] != null
+            ? SuggestedSurah.fromJson(
+                json['current_surah'] as Map<String, dynamic>)
+            : null,
+        suggestions: (json['suggestions'] as List? ?? [])
+            .map((s) => SuggestedSurah.fromJson(s as Map<String, dynamic>))
+            .toList(),
+        reviewDueSurahs: (json['review_due_surahs'] as List? ?? [])
+            .map((s) => SuggestedSurah.fromJson(s as Map<String, dynamic>))
+            .toList(),
       );
 }
 

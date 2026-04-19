@@ -27,10 +27,23 @@ final asrServiceProvider = Provider<AsrService>((ref) {
   return service;
 });
 
+// ── Sourates suggérées (Ikhtiar) ────────────────────────────────────
+
+final suggestedSurahsProvider = FutureProvider<SuggestedSurahsResponse>((ref) {
+  return ref.read(hifzV2ServiceProvider).fetchSuggestedSurahs();
+});
+
 // ── Wird du jour ────────────────────────────────────────────────────
 
+/// Provider pour le Wird du jour. Peut être paramétré par sourate.
 final wirdTodayProvider = FutureProvider<WirdTodayResponse>((ref) {
   return ref.read(hifzV2ServiceProvider).fetchWirdToday();
+});
+
+/// Provider paramétré pour le Wird d'une sourate spécifique.
+final wirdForSurahProvider =
+    FutureProvider.family<WirdTodayResponse, int>((ref, surahNumber) {
+  return ref.read(hifzV2ServiceProvider).fetchWirdToday(surahNumber: surahNumber);
 });
 
 // ── Contenu enrichi d'une sourate (par numéro) ─────────────────────
@@ -105,9 +118,9 @@ class WirdSessionNotifier extends StateNotifier<WirdSessionState> {
 
   final HifzV2Service _service;
 
-  /// Démarre le Wird du jour.
-  Future<void> start() async {
-    final id = await _service.startWird();
+  /// Démarre le Wird du jour. Si [surahNumber] est fourni, cible cette sourate.
+  Future<void> start({int? surahNumber}) async {
+    final id = await _service.startWird(surahNumber: surahNumber);
     state = state.copyWith(
       wirdSessionId: id,
       isStarted: true,

@@ -92,6 +92,7 @@ class ApiConstants {
   static const String asrHealth = '/api/health';
 
   // Hifz V2 — Wird & SRS
+  static const String studentHifzSurahsSuggested = '/student/hifz/v2/surahs/suggested';
   static const String studentHifzWirdToday = '/student/hifz/v2/wird/today';
   static const String studentHifzWirdStart = '/student/hifz/v2/wird/start';
   static String studentHifzWirdComplete(String id) => '/student/hifz/v2/wird/$id/complete';

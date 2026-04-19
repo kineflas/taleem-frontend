@@ -273,9 +273,11 @@ class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
   }
 
   void _showExitConfirmation() {
-    // Si on est sur Natija, le verset est déjà complété → pas de warning
+    // Si on est sur Natija, le verset est déjà complété → sauvegarder et quitter
     if (_verseResult != null) {
       widget.onComplete?.call(_verseResult!);
+      // Quitter le Wird (retour au menu Hifz V2)
+      if (mounted) Navigator.of(context).pop();
       return;
     }
 

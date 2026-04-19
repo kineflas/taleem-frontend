@@ -349,31 +349,29 @@ class _VersetMiroirState extends ConsumerState<VersetMiroir> {
 
         const SizedBox(height: 24),
 
-        // Boutons : Réessayer (si < 100%) + Continuer
-        if (accuracy < 1.0) ...[
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _retry,
-              icon: const Icon(Icons.refresh, size: 18),
-              label: const Text('Réessayer'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: HifzColors.emerald,
-                side: const BorderSide(color: HifzColors.emerald),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
+        // Boutons : Réessayer + Continuer
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _retry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Réessayer'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: HifzColors.emerald,
+              side: const BorderSide(color: HifzColors.emerald),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
-          const SizedBox(height: 10),
-        ],
+        ),
+        const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _completeExercise,
             style: HifzDecor.primaryButton,
-            child: Text(accuracy >= 1.0 ? 'Continuer' : 'Continuer quand même'),
+            child: const Text('Continuer'),
           ),
         ),
       ],

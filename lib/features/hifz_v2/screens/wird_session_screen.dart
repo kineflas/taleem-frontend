@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
@@ -28,6 +29,7 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
   final List<VerseSessionResult> _results = [];
   bool _isInFlow = false;
   bool _wirdComplete = false;
+  bool _autoAdvance = true; // Mode Enchaînement : auto-avance au verset suivant
 
   List<EnrichedVerse> get _currentVerses => switch (_currentBloc) {
         WirdBloc.jadid => widget.session.jadidVerses,
@@ -59,7 +61,9 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
       ref.read(wirdSessionProvider.notifier).nextVerse();
       setState(() {
         _currentVerseIdx++;
-        _isInFlow = false;
+        // Mode Enchaînement : rester dans le flow (auto-avance)
+        // Mode Classique : revenir à l'overview
+        _isInFlow = _autoAdvance;
       });
     } else {
       // Bloc terminé → passer au suivant
@@ -77,14 +81,14 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
           setState(() {
             _currentBloc = WirdBloc.qarib;
             _currentVerseIdx = 0;
-            _isInFlow = false;
+            _isInFlow = _autoAdvance;
           });
         } else if (widget.session.baidVerses.isNotEmpty) {
           notifier.nextBloc();
           setState(() {
             _currentBloc = WirdBloc.baid;
             _currentVerseIdx = 0;
-            _isInFlow = false;
+            _isInFlow = _autoAdvance;
           });
         } else {
           _finishWird();
@@ -95,7 +99,7 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
           setState(() {
             _currentBloc = WirdBloc.baid;
             _currentVerseIdx = 0;
-            _isInFlow = false;
+            _isInFlow = _autoAdvance;
           });
         } else {
           _finishWird();
@@ -198,6 +202,36 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
               // ── Verset courant ──
               Expanded(
                 child: _buildCurrentVerseCard(),
+              ),
+
+              // ── Toggle enchaînement ──
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Icon(Icons.fast_forward_rounded,
+                        color: _autoAdvance
+                            ? HifzColors.emerald
+                            : HifzColors.textLight,
+                        size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Enchaînement automatique',
+                        style: HifzTypo.body(
+                          color: _autoAdvance
+                              ? HifzColors.textDark
+                              : HifzColors.textLight,
+                        ),
+                      ),
+                    ),
+                    Switch.adaptive(
+                      value: _autoAdvance,
+                      activeColor: HifzColors.emerald,
+                      onChanged: (v) => setState(() => _autoAdvance = v),
+                    ),
+                  ],
+                ),
               ),
 
               // ── Bouton lancer ──
@@ -326,15 +360,38 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
                 const SizedBox(height: 32),
 
+                // ── Bouton principal : Choisir une autre sourate ──
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
                       ref.read(wirdSessionProvider.notifier).reset();
+                      ref.invalidate(suggestedSurahsProvider);
+                      ref.invalidate(wirdTodayProvider);
+                      ref.invalidate(journeyMapProvider);
+                      // Retourner à l'écran Ikhtiar
                       Navigator.of(context).pop();
+                      context.push('/hifz-v2/ikhtiar');
                     },
                     style: HifzDecor.primaryButton,
-                    child: const Text('Retour'),
+                    child: const Text('Choisir une autre sourate'),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ── Bouton secondaire : Retour au menu ──
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      ref.read(wirdSessionProvider.notifier).reset();
+                      ref.invalidate(wirdTodayProvider);
+                      ref.invalidate(journeyMapProvider);
+                      Navigator.of(context).pop();
+                    },
+                    style: HifzDecor.secondaryButton,
+                    child: const Text('Retour au menu'),
                   ),
                 ),
               ],

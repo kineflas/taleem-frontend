@@ -32,6 +32,7 @@ import '../../features/hifz/screens/hifz_session_screen.dart';
 import '../../features/hifz/screens/hifz_revision_screen.dart';
 import '../../features/hifz/screens/surah_heatmap_screen.dart';
 import '../../features/hifz_v2/screens/hifz_map_screen.dart';
+import '../../features/hifz_v2/screens/surah_selection_screen.dart';
 import '../../features/hifz_v2/screens/wird_session_screen.dart';
 import '../../features/hifz_v2/screens/wird_verse_flow_screen.dart';
 import '../../features/hifz_v2/models/wird_models.dart';
@@ -296,6 +297,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           surahNumber: int.parse(state.pathParameters['surahNumber']!),
           surahName: state.uri.queryParameters['name'] ?? 'Surah',
         ),
+      ),
+
+      // Hifz V2 — Ikhtiar (surah selection, full screen)
+      GoRoute(
+        path: '/hifz-v2/ikhtiar',
+        builder: (_, __) => const SurahSelectionScreen(),
       ),
 
       // Hifz V2 — Wird session (full screen)

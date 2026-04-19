@@ -6,9 +6,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../data/hifz_v2_service.dart';
+import '../data/hifz_v2_service.dart' show JourneyMapResponse, SurahMapEntry, WirdTodayResponse;
 import '../models/hifz_v2_theme.dart';
-import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
 
 class HifzMapScreen extends ConsumerWidget {
@@ -191,7 +190,6 @@ class HifzMapScreen extends ConsumerWidget {
   Widget _buildWirdButton(
       BuildContext context, WidgetRef ref, WirdTodayResponse wird) {
     final isCompleted = wird.status == 'COMPLETED';
-    final hasVerses = wird.totalVerses > 0;
 
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -209,12 +207,6 @@ class HifzMapScreen extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (hasVerses && !isCompleted)
-            Text(
-              '${wird.totalVerses} versets · ~${wird.estimatedDurationMinutes} min',
-              style: HifzTypo.body(color: HifzColors.textMedium),
-            ),
-          if (hasVerses && !isCompleted) const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -226,10 +218,7 @@ class HifzMapScreen extends ConsumerWidget {
                   : HifzDecor.primaryButton,
               onPressed: isCompleted
                   ? null
-                  : () async {
-                      // Charger le contenu des sourates et construire le WirdSession
-                      await _startWird(context, ref, wird);
-                    },
+                  : () => context.push('/hifz-v2/ikhtiar'),
               child: Text(
                 isCompleted
                     ? 'Wird terminé ✓'
@@ -242,77 +231,6 @@ class HifzMapScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _startWird(
-      BuildContext context, WidgetRef ref, WirdTodayResponse wird) async {
-    final service = ref.read(hifzV2ServiceProvider);
-
-    // Charger le contenu enrichi pour chaque sourate unique dans le Wird
-    final allVerseRefs = <({int surah, int verse})>[];
-    final surahNumbers = <int>{};
-
-    for (final bloc in wird.blocs) {
-      for (final v in bloc.verses) {
-        allVerseRefs.add((surah: v.surahNumber, verse: v.verseNumber));
-        surahNumbers.add(v.surahNumber);
-      }
-    }
-
-    // Charger toutes les sourates en parallèle
-    final surahContents = <int, EnrichedSurahResponse>{};
-    try {
-      final futures = surahNumbers.map(
-        (sn) => service.fetchSurahContent(sn).then((r) => surahContents[sn] = r),
-      );
-      await Future.wait(futures);
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur de chargement: $e')),
-      );
-      return;
-    }
-
-    // Construire les EnrichedVerse pour chaque bloc
-    EnrichedVerse? _findVerse(int surah, int verse) {
-      final content = surahContents[surah];
-      if (content == null) return null;
-      return content.verses.where((v) => v.verseNumber == verse).firstOrNull;
-    }
-
-    final jadidVerses = <EnrichedVerse>[];
-    final qaribVerses = <EnrichedVerse>[];
-    final baidVerses = <EnrichedVerse>[];
-
-    for (final bloc in wird.blocs) {
-      for (final v in bloc.verses) {
-        final enriched = _findVerse(v.surahNumber, v.verseNumber);
-        if (enriched == null) continue;
-        switch (bloc.blocType) {
-          case 'JADID':
-            jadidVerses.add(enriched);
-          case 'QARIB':
-            qaribVerses.add(enriched);
-          case 'BAID':
-            baidVerses.add(enriched);
-        }
-      }
-    }
-
-    final session = WirdSession(
-      date: DateTime.now(),
-      jadidVerses: jadidVerses,
-      qaribVerses: qaribVerses,
-      baidVerses: baidVerses,
-      reciterFolder: wird.reciterFolder,
-    );
-
-    // Démarrer la session côté backend
-    await ref.read(wirdSessionProvider.notifier).start();
-
-    if (!context.mounted) return;
-    context.push('/hifz-v2/wird', extra: session);
   }
 }
 
