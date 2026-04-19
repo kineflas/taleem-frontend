@@ -351,7 +351,7 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _SurahCard extends StatelessWidget {
+class _SurahCard extends ConsumerWidget {
   const _SurahCard({required this.surah});
 
   final SurahMapEntry surah;
@@ -363,7 +363,7 @@ class _SurahCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final progress = surah.totalVerses > 0
         ? surah.versesStarted / surah.totalVerses
         : 0.0;
@@ -375,9 +375,7 @@ class _SurahCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            // TODO: Navigate to surah detail screen
-          },
+          onTap: () => _showSurahDetail(context, ref),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -483,6 +481,144 @@ class _SurahCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _showSurahDetail(BuildContext context, WidgetRef ref) {
+    final contentAsync = ref.read(surahContentProvider(surah.surahNumber));
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: HifzColors.ivory,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (_, scrollController) => Consumer(
+          builder: (context, ref, _) {
+            final asyncContent = ref.watch(surahContentProvider(surah.surahNumber));
+
+            return asyncContent.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(48),
+                  child: CircularProgressIndicator(color: HifzColors.emerald),
+                ),
+              ),
+              error: (e, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'Erreur : $e',
+                    style: HifzTypo.body(color: HifzColors.textLight),
+                  ),
+                ),
+              ),
+              data: (content) => ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: HifzColors.ivoryDark,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Surah header
+                  Text(
+                    content.nameAr,
+                    textAlign: TextAlign.center,
+                    textDirection: TextDirection.rtl,
+                    style: HifzTypo.verse(size: 28, color: HifzColors.emerald),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${content.nameFr} — ${content.verseCount} versets',
+                    textAlign: TextAlign.center,
+                    style: HifzTypo.body(color: HifzColors.textMedium),
+                  ),
+
+                  // Progress
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _MiniStat('${surah.versesStarted}/${surah.totalVerses}', 'Versets'),
+                      _MiniStat('${surah.totalStars}', 'Étoiles'),
+                      _MiniStat(
+                        '${surah.averageScore.round()}%',
+                        'Score moy.',
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(color: HifzColors.ivoryDark),
+                  const SizedBox(height: 12),
+
+                  // Verse list
+                  ...content.verses.map((v) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: HifzColors.ivoryWarm,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            v.textAr,
+                            textAlign: TextAlign.right,
+                            textDirection: TextDirection.rtl,
+                            style: HifzTypo.verse(size: 20),
+                          ),
+                          if (v.textFr != null && v.textFr!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              v.textFr!,
+                              style: HifzTypo.translation(),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  )),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat(this.value, this.label);
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(value, style: HifzTypo.sectionTitle(color: HifzColors.emerald)),
+        Text(label, style: HifzTypo.body(color: HifzColors.textLight)),
+      ],
     );
   }
 }
