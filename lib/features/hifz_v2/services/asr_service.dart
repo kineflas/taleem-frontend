@@ -7,12 +7,15 @@
 ///
 /// Utilise le modèle tarteel-ai/whisper-base-ar-quran, fine-tuné pour le Coran.
 import 'dart:async';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:record/record.dart';
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
+
+// Imports conditionnels : dart:html pour web (blob fetch), dart:io pour mobile
+import 'asr_io_stub.dart'
+    if (dart.library.html) 'asr_io_web.dart'
+    if (dart.library.io) 'asr_io_native.dart';
 
 // ── Configuration ──────────────────────────────────────────────────
 
@@ -221,21 +224,17 @@ class AsrService {
     _webRecordingBytes = null;
 
     if (kIsWeb) {
-      // Sur Web, on utilise l'encodeur WAV pour avoir un format fiable
-      // et on récupère via le stream ou le blob.
+      // Sur Web, MediaRecorder supporte webm/opus nativement.
+      // AudioEncoder.opus → audio/webm;codecs=opus (tous les navigateurs)
       const config = RecordConfig(
-        encoder: AudioEncoder.wav,
+        encoder: AudioEncoder.opus,
         sampleRate: 16000,
         numChannels: 1,
-        bitRate: 256000,
+        bitRate: 64000,
       );
-      // path vide → record gère le blob en mémoire sur web
       await _recorder.start(config, path: '');
     } else {
-      final dir = await getTemporaryDirectory();
-      _currentRecordingPath =
-          '${dir.path}/asr_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
+      _currentRecordingPath = await getTempRecordingPath();
       const config = RecordConfig(
         encoder: AudioEncoder.aacLc,
         sampleRate: 16000,
@@ -246,30 +245,26 @@ class AsrService {
     }
 
     _isRecording = true;
+    debugPrint('ASR: Recording started (web=$kIsWeb)');
   }
 
-  /// Arrête l'enregistrement et retourne le chemin du fichier (ou blob URL sur web).
+  /// Arrête l'enregistrement et retourne le chemin du fichier (ou 'web' sur navigateur).
   Future<String?> stopRecording() async {
     if (!_isRecording) return null;
 
     final path = await _recorder.stop();
     _isRecording = false;
+    debugPrint('ASR: Recording stopped, path=$path');
 
     if (kIsWeb && path != null && path.isNotEmpty) {
       // Sur web, `record` retourne un blob URL (blob:http://...)
-      // On télécharge les bytes du blob pour les envoyer au serveur ASR.
-      // Utiliser un Dio sans baseUrl pour éviter le préfixage.
-      try {
-        final blobDio = Dio();
-        final response = await blobDio.get<List<int>>(
-          path,
-          options: Options(responseType: ResponseType.bytes),
-        );
-        _webRecordingBytes = Uint8List.fromList(response.data!);
+      // On récupère les bytes via dart:html XHR (seul moyen fiable)
+      _webRecordingBytes = await fetchBlobBytes(path);
+      if (_webRecordingBytes != null && _webRecordingBytes!.isNotEmpty) {
         debugPrint('ASR: Blob web récupéré: ${_webRecordingBytes!.length} bytes');
-        return path; // retourner une valeur non-nulle pour signaler le succès
-      } catch (e) {
-        debugPrint('ASR: Erreur récupération blob web: $e');
+        return 'web'; // Signal non-null pour indiquer le succès
+      } else {
+        debugPrint('ASR: Blob web vide ou null');
         return null;
       }
     }
@@ -295,10 +290,11 @@ class AsrService {
 
       MultipartFile audioFile;
       if (kIsWeb && _webRecordingBytes != null) {
-        // Web : envoyer les bytes en mémoire
+        // Web : envoyer les bytes du blob en mémoire
         audioFile = MultipartFile.fromBytes(
           _webRecordingBytes!,
-          filename: 'recording.wav',
+          filename: 'recording.webm',
+          contentType: DioMediaType.parse('audio/webm'),
         );
       } else {
         // Mobile/Desktop : envoyer depuis le fichier
@@ -307,6 +303,8 @@ class AsrService {
           filename: 'recording.m4a',
         );
       }
+
+      debugPrint('ASR: Envoi vers $endpoint (${kIsWeb ? "${_webRecordingBytes?.length ?? 0} bytes" : audioPath})');
 
       final formData = FormData.fromMap({
         'audio': audioFile,
@@ -317,11 +315,13 @@ class AsrService {
       final response = await _dio.post(endpoint, data: formData);
 
       if (response.statusCode == 200) {
-        return AsrValidationResult.fromJson(
+        final result = AsrValidationResult.fromJson(
             response.data as Map<String, dynamic>);
+        debugPrint('ASR: Résultat reçu — accuracy=${result.accuracy}, transcription="${result.transcription}"');
+        return result;
       }
 
-      // Erreur serveur → fallback simulation
+      debugPrint('ASR: Erreur serveur ${response.statusCode}');
       return AsrValidationResult.simulated(
         words: words,
         recSeconds: recSeconds,
@@ -330,7 +330,6 @@ class AsrService {
       );
     } catch (e) {
       debugPrint('ASR: Erreur validation: $e');
-      // Serveur inaccessible → fallback simulation
       return AsrValidationResult.simulated(
         words: words,
         recSeconds: recSeconds,
@@ -344,12 +343,7 @@ class AsrService {
   Future<void> cleanup() async {
     _webRecordingBytes = null;
     if (_currentRecordingPath != null && !kIsWeb) {
-      try {
-        final file = File(_currentRecordingPath!);
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } catch (_) {}
+      await deleteFile(_currentRecordingPath!);
     }
     _currentRecordingPath = null;
   }
