@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
+import '../providers/hifz_v2_provider.dart';
 import 'wird_verse_flow_screen.dart';
 
 /// Écran principal du Wird quotidien.
@@ -8,7 +10,7 @@ import 'wird_verse_flow_screen.dart';
 /// Orchestre les 3 blocs (JADID → QARIB → BA'ID) et affiche
 /// la progression globale. Chaque verset lance le flow en 5 étapes
 /// via WirdVerseFlowScreen.
-class WirdSessionScreen extends StatefulWidget {
+class WirdSessionScreen extends ConsumerStatefulWidget {
   const WirdSessionScreen({
     super.key,
     required this.session,
@@ -17,10 +19,10 @@ class WirdSessionScreen extends StatefulWidget {
   final WirdSession session;
 
   @override
-  State<WirdSessionScreen> createState() => _WirdSessionScreenState();
+  ConsumerState<WirdSessionScreen> createState() => _WirdSessionScreenState();
 }
 
-class _WirdSessionScreenState extends State<WirdSessionScreen> {
+class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
   WirdBloc _currentBloc = WirdBloc.jadid;
   int _currentVerseIdx = 0;
   final List<VerseSessionResult> _results = [];
@@ -53,6 +55,8 @@ class _WirdSessionScreenState extends State<WirdSessionScreen> {
     _results.add(result);
 
     if (_currentVerseIdx + 1 < _currentVerses.length) {
+      // Avancer au verset suivant dans le même bloc
+      ref.read(wirdSessionProvider.notifier).nextVerse();
       setState(() {
         _currentVerseIdx++;
         _isInFlow = false;
@@ -64,15 +68,19 @@ class _WirdSessionScreenState extends State<WirdSessionScreen> {
   }
 
   void _advanceBloc() {
+    final notifier = ref.read(wirdSessionProvider.notifier);
+
     switch (_currentBloc) {
       case WirdBloc.jadid:
         if (widget.session.qaribVerses.isNotEmpty) {
+          notifier.nextBloc();
           setState(() {
             _currentBloc = WirdBloc.qarib;
             _currentVerseIdx = 0;
             _isInFlow = false;
           });
         } else if (widget.session.baidVerses.isNotEmpty) {
+          notifier.nextBloc();
           setState(() {
             _currentBloc = WirdBloc.baid;
             _currentVerseIdx = 0;
@@ -83,6 +91,7 @@ class _WirdSessionScreenState extends State<WirdSessionScreen> {
         }
       case WirdBloc.qarib:
         if (widget.session.baidVerses.isNotEmpty) {
+          notifier.nextBloc();
           setState(() {
             _currentBloc = WirdBloc.baid;
             _currentVerseIdx = 0;
@@ -96,7 +105,18 @@ class _WirdSessionScreenState extends State<WirdSessionScreen> {
     }
   }
 
-  void _finishWird() {
+  Future<void> _finishWird() async {
+    // Terminer le Wird côté backend
+    try {
+      await ref.read(wirdSessionProvider.notifier).complete();
+      // Rafraîchir les données après complétion
+      ref.invalidate(wirdTodayProvider);
+      ref.invalidate(journeyMapProvider);
+    } catch (_) {
+      // Ne pas bloquer l'affichage du résultat
+    }
+
+    if (!mounted) return;
     setState(() {
       _wirdComplete = true;
       _isInFlow = false;
@@ -270,7 +290,11 @@ class _WirdSessionScreenState extends State<WirdSessionScreen> {
   }
 
   Widget _buildWirdComplete() {
-    final totalXp = _results.fold<int>(0, (s, r) => s + r.xpEarned);
+    final sessionState = ref.read(wirdSessionProvider);
+    // Utiliser les XP du backend si disponibles, sinon fallback local
+    final totalXp = sessionState.totalXpEarned > 0
+        ? sessionState.totalXpEarned
+        : _results.fold<int>(0, (s, r) => s + r.xpEarned);
     final totalStars = _results.fold<int>(0, (s, r) => s + r.stars);
     final avgScore = _results.isEmpty
         ? 0
@@ -305,7 +329,10 @@ class _WirdSessionScreenState extends State<WirdSessionScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      ref.read(wirdSessionProvider.notifier).reset();
+                      Navigator.of(context).pop();
+                    },
                     style: HifzDecor.primaryButton,
                     child: const Text('Retour'),
                   ),

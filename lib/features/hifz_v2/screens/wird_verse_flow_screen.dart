@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
+import '../providers/hifz_v2_provider.dart';
 import '../services/audio_orchestrator.dart';
 import '../widgets/step_nour.dart';
 import '../widgets/step_tikrar.dart';
@@ -13,7 +15,7 @@ import '../widgets/wird_step_indicator.dart';
 ///
 /// Pas de navigation entre écrans : les étapes se succèdent en place,
 /// avec une transition douce (fade + slide vertical léger).
-class WirdVerseFlowScreen extends StatefulWidget {
+class WirdVerseFlowScreen extends ConsumerStatefulWidget {
   const WirdVerseFlowScreen({
     super.key,
     required this.verse,
@@ -28,10 +30,10 @@ class WirdVerseFlowScreen extends StatefulWidget {
   final void Function(VerseSessionResult result)? onComplete;
 
   @override
-  State<WirdVerseFlowScreen> createState() => _WirdVerseFlowScreenState();
+  ConsumerState<WirdVerseFlowScreen> createState() => _WirdVerseFlowScreenState();
 }
 
-class _WirdVerseFlowScreenState extends State<WirdVerseFlowScreen> {
+class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
   late WirdStep _currentStep;
   late AudioOrchestrator _orchestrator;
   final List<StepResult> _stepResults = [];
@@ -76,12 +78,52 @@ class _WirdVerseFlowScreenState extends State<WirdVerseFlowScreen> {
   void _onStepComplete(StepResult result) {
     _stepResults.add(result);
 
+    // ── Soumettre le résultat de l'étape au backend ──
+    _submitStepToBackend(result);
+
+    // ── Soumettre les exercices individuels (TAMRIN) ──
+    if (result.step == WirdStep.tamrin) {
+      for (final ex in result.exerciseResults) {
+        _submitExerciseToBackend(ex);
+      }
+    }
+
     final idx = _steps.indexOf(_currentStep);
     if (idx + 1 < _steps.length) {
       setState(() => _currentStep = _steps[idx + 1]);
     } else {
       // Flow terminé → calculer le résultat
       _finishFlow();
+    }
+  }
+
+  /// Envoie le résultat d'une étape au backend.
+  Future<void> _submitStepToBackend(StepResult result) async {
+    try {
+      await ref.read(wirdSessionProvider.notifier).submitStep(
+        surahNumber: widget.verse.surahNumber,
+        verseNumber: widget.verse.verseNumber,
+        step: result.step.name.toUpperCase(),
+        score: result.score,
+        durationSeconds: result.durationSeconds,
+      );
+    } catch (_) {
+      // Ne pas bloquer le flow si le backend échoue
+    }
+  }
+
+  /// Envoie le résultat d'un exercice au backend.
+  Future<void> _submitExerciseToBackend(ExerciseResult result) async {
+    try {
+      await ref.read(wirdSessionProvider.notifier).submitExercise(
+        surahNumber: widget.verse.surahNumber,
+        verseNumber: widget.verse.verseNumber,
+        exerciseType: result.type.key,
+        isCorrect: result.isCorrect,
+        responseTimeMs: result.responseTimeMs,
+      );
+    } catch (_) {
+      // Ne pas bloquer le flow si le backend échoue
     }
   }
 

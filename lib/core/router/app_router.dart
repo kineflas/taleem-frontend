@@ -31,6 +31,7 @@ import '../../features/hifz/screens/hifz_goal_create_screen.dart';
 import '../../features/hifz/screens/hifz_session_screen.dart';
 import '../../features/hifz/screens/hifz_revision_screen.dart';
 import '../../features/hifz/screens/surah_heatmap_screen.dart';
+import '../../features/hifz_v2/screens/hifz_map_screen.dart';
 import '../../features/hifz_v2/screens/wird_session_screen.dart';
 import '../../features/hifz_v2/screens/wird_verse_flow_screen.dart';
 import '../../features/hifz_v2/models/wird_models.dart';
@@ -122,6 +123,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/student/hifz', builder: (_, __) => const HifzHubScreen()),
           GoRoute(path: '/student/medine', builder: (_, __) => const LessonListScreen()),
           GoRoute(path: '/student/medine-v2', builder: (_, __) => const CaravaneMapScreen()),
+          GoRoute(path: '/student/hifz-v2', builder: (_, __) => const HifzMapScreen()),
           GoRoute(path: '/student/odyssee', builder: (_, __) => const OdysseeMapScreen()),
           GoRoute(path: '/student/settings', builder: (_, __) => const StudentSettingsScreen()),
         ],

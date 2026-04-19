@@ -91,11 +91,16 @@ class ApiConstants {
   static const String asrFindVerse = '/api/find-verse';
   static const String asrHealth = '/api/health';
 
-  // Hifz V2 — Wird
-  static const String studentHifzWirdToday = '/student/hifz/wird/today';
-  static const String studentHifzWirdStart = '/student/hifz/wird/start';
-  static const String studentHifzExerciseAnswer = '/student/hifz/exercises/answer';
-  static String studentHifzSurahContent(int n) => '/student/hifz/surah/$n/content';
+  // Hifz V2 — Wird & SRS
+  static const String studentHifzWirdToday = '/student/hifz/v2/wird/today';
+  static const String studentHifzWirdStart = '/student/hifz/v2/wird/start';
+  static String studentHifzWirdComplete(String id) => '/student/hifz/v2/wird/$id/complete';
+  static const String studentHifzExerciseAnswer = '/student/hifz/v2/exercises/answer';
+  static const String studentHifzStepResult = '/student/hifz/v2/steps/result';
+  static String studentHifzSurahContent(int n) => '/student/hifz/v2/surah/$n/content';
+  static const String studentHifzMap = '/student/hifz/v2/map';
+  static String studentHifzVerseProgress(int surah, int verse) =>
+      '/student/hifz/v2/verse/$surah/$verse/progress';
 
   // Medine V2
   static const String lessonsV2 = '/api/v2/lessons';
