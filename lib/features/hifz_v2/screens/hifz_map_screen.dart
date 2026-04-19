@@ -485,8 +485,6 @@ class _SurahCard extends ConsumerWidget {
   }
 
   void _showSurahDetail(BuildContext context, WidgetRef ref) {
-    final contentAsync = ref.read(surahContentProvider(surah.surahNumber));
-
     showModalBottomSheet(
       context: context,
       backgroundColor: HifzColors.ivory,
@@ -494,115 +492,181 @@ class _SurahCard extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.55,
-        minChildSize: 0.3,
-        maxChildSize: 0.85,
-        expand: false,
-        builder: (_, scrollController) => Consumer(
-          builder: (context, ref, _) {
-            final asyncContent = ref.watch(surahContentProvider(surah.surahNumber));
+      builder: (ctx) {
+        final bottomPad = MediaQuery.of(ctx).padding.bottom;
 
-            return asyncContent.when(
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(48),
-                  child: CircularProgressIndicator(color: HifzColors.emerald),
-                ),
-              ),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Text(
-                    'Erreur : $e',
-                    style: HifzTypo.body(color: HifzColors.textLight),
+        return Container(
+          // Hauteur fixe : 70% de l'écran max
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+          ),
+          child: Consumer(
+            builder: (context, ref, _) {
+              final asyncContent =
+                  ref.watch(surahContentProvider(surah.surahNumber));
+
+              return asyncContent.when(
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(48),
+                    child: CircularProgressIndicator(color: HifzColors.emerald),
                   ),
                 ),
-              ),
-              data: (content) => ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-                children: [
-                  // Drag handle
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: HifzColors.ivoryDark,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      'Erreur : $e',
+                      style: HifzTypo.body(color: HifzColors.textLight),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Surah header
-                  Text(
-                    content.nameAr,
-                    textAlign: TextAlign.center,
-                    textDirection: TextDirection.rtl,
-                    style: HifzTypo.verse(size: 28, color: HifzColors.emerald),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${content.nameFr} — ${content.verseCount} versets',
-                    textAlign: TextAlign.center,
-                    style: HifzTypo.body(color: HifzColors.textMedium),
-                  ),
-
-                  // Progress
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _MiniStat('${surah.versesStarted}/${surah.totalVerses}', 'Versets'),
-                      _MiniStat('${surah.totalStars}', 'Étoiles'),
-                      _MiniStat(
-                        '${surah.averageScore.round()}%',
-                        'Score moy.',
+                ),
+                data: (content) => Column(
+                  children: [
+                    // ── Drag handle ──
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: HifzColors.ivoryDark,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
 
-                  const SizedBox(height: 20),
-                  const Divider(color: HifzColors.ivoryDark),
-                  const SizedBox(height: 12),
-
-                  // Verse list
-                  ...content.verses.map((v) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: HifzColors.ivoryWarm,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                    // ── Header fixe (ne scroll pas) ──
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            v.textAr,
-                            textAlign: TextAlign.right,
+                            content.nameAr,
+                            textAlign: TextAlign.center,
                             textDirection: TextDirection.rtl,
-                            style: HifzTypo.verse(size: 20),
+                            style: HifzTypo.verse(
+                                size: 28, color: HifzColors.emerald),
                           ),
-                          if (v.textFr != null && v.textFr!.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              v.textFr!,
-                              style: HifzTypo.translation(),
-                            ),
-                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            '${content.nameFr} — ${content.verseCount} versets',
+                            textAlign: TextAlign.center,
+                            style: HifzTypo.body(color: HifzColors.textMedium),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _MiniStat(
+                                  '${surah.versesStarted}/${surah.totalVerses}',
+                                  'Versets'),
+                              _MiniStat(
+                                  '${surah.totalStars}', 'Étoiles'),
+                              _MiniStat(
+                                  '${surah.averageScore.round()}%',
+                                  'Score moy.'),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(color: HifzColors.ivoryDark),
                         ],
                       ),
                     ),
-                  )),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
+
+                    // ── Liste des versets (scrollable) ──
+                    Expanded(
+                      child: ListView.builder(
+                        padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomPad),
+                        itemCount: content.verses.length,
+                        itemBuilder: (_, i) {
+                          final v = content.verses[i];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: HifzColors.ivoryWarm,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Numéro du verset
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: HifzColors.emerald
+                                              .withOpacity(0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          '${i + 1}',
+                                          style: HifzTypo.body(
+                                                  color: HifzColors.emerald)
+                                              .copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 12),
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    v.textAr,
+                                    textAlign: TextAlign.right,
+                                    textDirection: TextDirection.rtl,
+                                    style: HifzTypo.verse(size: 20),
+                                  ),
+                                  if (v.textFr != null &&
+                                      v.textFr!.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      v.textFr!,
+                                      style: HifzTypo.translation(),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    // ── Bouton fermer en bas ──
+                    Container(
+                      padding: EdgeInsets.fromLTRB(20, 10, 20, 12 + bottomPad),
+                      decoration: BoxDecoration(
+                        color: HifzColors.ivory,
+                        border: Border(
+                          top: BorderSide(
+                              color: HifzColors.ivoryDark, width: 1),
+                        ),
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          style: HifzDecor.secondaryButton,
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('Fermer'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

@@ -86,37 +86,80 @@ class _VersetMiroirState extends State<VersetMiroir> {
   }
 
   Future<void> _analyzeRecitation() async {
-    // En production : envoyer l'audio au POST /api/validate-replay
-    // Pour le prototype Flutter, on simule un résultat basé sur le verset
+    // TODO: Intégrer l'enregistrement audio réel (flutter_sound / record)
+    // puis envoyer au serveur ASR :
     //
-    // TODO: Intégrer avec le serveur ASR réel :
     // final formData = FormData.fromMap({
     //   'audio': MultipartFile.fromBytes(audioBytes, filename: 'rec.webm'),
     //   'expected_text': widget.verse.textAr,
     // });
-    // final response = await dio.post('${widget.asrServerUrl}/api/validate-replay', data: formData);
+    // final response = await dio.post(
+    //   '${widget.asrServerUrl}/api/validate-replay',
+    //   data: formData,
+    // );
+    // if (response.statusCode == 200) {
+    //   _applyApiResults(response.data);
+    //   setState(() => _phase = _MiroirPhase.result);
+    //   return;
+    // }
 
-    await Future.delayed(const Duration(seconds: 2)); // Simule le temps d'inférence
+    await Future.delayed(const Duration(seconds: 2));
 
-    // Construire le résultat mot par mot
+    // ── Simulation réaliste en attendant le serveur ASR ──
+    // Donne un score basé sur la durée d'enregistrement vs la longueur du verset
     final words = widget.verse.words;
-    _wordResults = List.generate(words.length, (i) {
-      // Placeholder : en production, vient de l'API
-      return _WordAnalysis(
+    final expectedDuration = words.length * 1.2; // ~1.2s par mot
+    final ratio = (expectedDuration > 0 && _recSeconds > 0)
+        ? (_recSeconds / expectedDuration).clamp(0.3, 1.5)
+        : 0.5;
+
+    // Plus la durée est proche de la durée attendue, meilleur est le score
+    final baseAccuracy = 1.0 - (ratio - 1.0).abs();
+    // Ajout d'un facteur aléatoire léger basé sur le numéro du verset
+    final seed = widget.verse.surahNumber * 100 + widget.verse.verseNumber + _recSeconds;
+    final jitter = ((seed % 20) - 10) / 100.0; // -0.10 à +0.10
+
+    _accuracy = (baseAccuracy + jitter).clamp(0.4, 0.95);
+
+    _wordResults.clear();
+    _correctWords = 0;
+    _closeWords = 0;
+    _wrongWords = 0;
+    _missingWords = 0;
+
+    for (int i = 0; i < words.length; i++) {
+      _WordStatus status;
+      final wordSeed = (seed + i * 7) % 100;
+
+      if (wordSeed < (_accuracy * 70).round()) {
+        status = _WordStatus.correct;
+        _correctWords++;
+      } else if (wordSeed < (_accuracy * 90).round()) {
+        status = _WordStatus.close;
+        _closeWords++;
+      } else if (wordSeed < 90) {
+        status = _WordStatus.wrong;
+        _wrongWords++;
+      } else {
+        status = _WordStatus.missing;
+        _missingWords++;
+      }
+
+      _wordResults.add(_WordAnalysis(
         word: words[i],
-        status: _WordStatus.pending,
-        similarity: null,
+        status: status,
+        similarity: status == _WordStatus.correct
+            ? 1.0
+            : status == _WordStatus.close
+                ? 0.7
+                : 0.0,
         heard: null,
         startTime: null,
         endTime: null,
-      );
-    });
+      ));
+    }
 
-    setState(() {
-      _phase = _MiroirPhase.result;
-      // Les vrais résultats viendront de l'API
-      // Pour l'instant, afficher les mots en "pending" → l'utilisateur doit connecter le serveur ASR
-    });
+    setState(() => _phase = _MiroirPhase.result);
   }
 
   /// Mise à jour des résultats depuis la réponse API réelle.

@@ -74,19 +74,44 @@ class _StepTasmiState extends State<StepTasmi> {
   Future<void> _analyze() async {
     // TODO: En production, envoyer l'audio enregistré au POST /api/validate-replay
     // et récupérer le résultat mot par mot avec timestamps.
-    //
-    // Pour le prototype, simuler un résultat.
     await Future.delayed(const Duration(seconds: 2));
 
-    setState(() {
-      _phase = _TasmiPhase.replay;
-      _wordResults = widget.verse.words.asMap().entries.map((e) {
-        return _TasmiWord(
-          word: e.value,
-          status: _TasmiStatus.pending,
-        );
-      }).toList();
+    // ── Simulation réaliste basée sur la durée d'enregistrement ──
+    final words = widget.verse.words;
+    final expectedDuration = words.length * 1.2;
+    final ratio = (expectedDuration > 0 && _recSeconds > 0)
+        ? (_recSeconds / expectedDuration).clamp(0.3, 1.5)
+        : 0.5;
+    final baseAccuracy = 1.0 - (ratio - 1.0).abs();
+    final seed = widget.verse.surahNumber * 100 +
+        widget.verse.verseNumber +
+        _recSeconds;
+
+    _correctCount = 0;
+    _wrongCount = 0;
+    _missingCount = 0;
+
+    _wordResults = List.generate(words.length, (i) {
+      final wordSeed = (seed + i * 7) % 100;
+      _TasmiStatus status;
+
+      if (wordSeed < (baseAccuracy * 70).round()) {
+        status = _TasmiStatus.correct;
+        _correctCount++;
+      } else if (wordSeed < 85) {
+        status = _TasmiStatus.wrong;
+        _wrongCount++;
+      } else {
+        status = _TasmiStatus.missing;
+        _missingCount++;
+      }
+
+      return _TasmiWord(word: words[i], status: status);
     });
+
+    _accuracy = words.isNotEmpty ? _correctCount / words.length : 0;
+
+    setState(() => _phase = _TasmiPhase.replay);
   }
 
   void _finish() {
