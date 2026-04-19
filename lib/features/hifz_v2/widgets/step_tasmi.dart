@@ -112,6 +112,14 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
     if (mounted) setState(() => _phase = _TasmiPhase.replay);
   }
 
+  void _retry() {
+    setState(() {
+      _phase = _TasmiPhase.prompt;
+      _asrResult = null;
+      _recSeconds = 0;
+    });
+  }
+
   void _finish() {
     final result = _asrResult;
     final duration = DateTime.now().difference(_startTime).inSeconds;
@@ -351,12 +359,31 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
 
         const SizedBox(height: 24),
 
+        // Boutons : Réessayer (si < 100%) + Continuer
+        if (accuracy < 1.0) ...[
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _retry,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Réessayer'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: HifzColors.emerald,
+                side: const BorderSide(color: HifzColors.emerald),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _finish,
             style: HifzDecor.primaryButton,
-            child: const Text('Continuer'),
+            child: Text(accuracy >= 1.0 ? 'Continuer' : 'Continuer quand même'),
           ),
         ),
       ],
