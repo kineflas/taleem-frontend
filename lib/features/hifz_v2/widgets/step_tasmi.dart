@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
+import '../providers/hifz_v2_provider.dart';
+import '../services/asr_service.dart';
 
 /// Étape 4 — TASMI' (تسميع) : Récitation intégrale.
 ///
-/// Intègre la mécanique du /replay :
 /// - L'écran affiche uniquement la référence (pas le texte)
 /// - L'élève récite de mémoire
-/// - L'audio est analysé par le serveur ASR (validate-replay)
+/// - L'audio est envoyé au serveur ASR (validate-replay)
 /// - Résultat mot par mot avec timestamps synchronisés
-/// - Option de réécouter avec suivi karaoke coloré
-class StepTasmi extends StatefulWidget {
+class StepTasmi extends ConsumerStatefulWidget {
   const StepTasmi({
     super.key,
     required this.verse,
@@ -23,12 +24,12 @@ class StepTasmi extends StatefulWidget {
   final void Function(StepResult result) onComplete;
 
   @override
-  State<StepTasmi> createState() => _StepTasmiState();
+  ConsumerState<StepTasmi> createState() => _StepTasmiState();
 }
 
 enum _TasmiPhase { prompt, recording, analyzing, replay }
 
-class _StepTasmiState extends State<StepTasmi> {
+class _StepTasmiState extends ConsumerState<StepTasmi> {
   _TasmiPhase _phase = _TasmiPhase.prompt;
   final _startTime = DateTime.now();
 
@@ -36,88 +37,85 @@ class _StepTasmiState extends State<StepTasmi> {
   Timer? _recTimer;
   int _recSeconds = 0;
 
-  // Résultat
-  double _accuracy = 0;
-  List<_TasmiWord> _wordResults = [];
-  int _correctCount = 0;
-  int _wrongCount = 0;
-  int _missingCount = 0;
+  // Résultat ASR
+  AsrValidationResult? _asrResult;
 
-  // Replay
+  // Replay audio
   final AudioPlayer _replayPlayer = AudioPlayer();
   bool _isReplaying = false;
   int _activeWordIdx = -1;
+  Timer? _replayTimer;
 
   @override
   void dispose() {
     _recTimer?.cancel();
+    _replayTimer?.cancel();
     _replayPlayer.dispose();
     super.dispose();
   }
 
-  void _startRecording() {
+  Future<void> _startRecording() async {
+    final asr = ref.read(asrServiceProvider);
+
+    try {
+      await asr.startRecording();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur micro : $e')),
+      );
+      return;
+    }
+
     setState(() {
       _phase = _TasmiPhase.recording;
       _recSeconds = 0;
     });
+
     _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => _recSeconds++);
+      if (_recSeconds >= 30) _stopRecording();
     });
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _recTimer?.cancel();
+    if (_phase != _TasmiPhase.recording) return;
+
     setState(() => _phase = _TasmiPhase.analyzing);
-    _analyze();
-  }
 
-  Future<void> _analyze() async {
-    // TODO: En production, envoyer l'audio enregistré au POST /api/validate-replay
-    // et récupérer le résultat mot par mot avec timestamps.
-    await Future.delayed(const Duration(seconds: 2));
+    final asr = ref.read(asrServiceProvider);
+    final audioPath = await asr.stopRecording();
 
-    // ── Simulation réaliste basée sur la durée d'enregistrement ──
-    final words = widget.verse.words;
-    final expectedDuration = words.length * 1.2;
-    final ratio = (expectedDuration > 0 && _recSeconds > 0)
-        ? (_recSeconds / expectedDuration).clamp(0.3, 1.5)
-        : 0.5;
-    final baseAccuracy = 1.0 - (ratio - 1.0).abs();
-    final seed = widget.verse.surahNumber * 100 +
-        widget.verse.verseNumber +
-        _recSeconds;
+    if (audioPath == null || audioPath.isEmpty) {
+      _asrResult = AsrValidationResult.simulated(
+        words: widget.verse.words,
+        recSeconds: _recSeconds,
+        surahNumber: widget.verse.surahNumber,
+        verseNumber: widget.verse.verseNumber,
+      );
+      if (mounted) setState(() => _phase = _TasmiPhase.replay);
+      return;
+    }
 
-    _correctCount = 0;
-    _wrongCount = 0;
-    _missingCount = 0;
+    _asrResult = await asr.validateRecording(
+      audioPath: audioPath,
+      expectedText: widget.verse.textAr,
+      words: widget.verse.words,
+      recSeconds: _recSeconds,
+      surahNumber: widget.verse.surahNumber,
+      verseNumber: widget.verse.verseNumber,
+      withTimestamps: true,
+    );
 
-    _wordResults = List.generate(words.length, (i) {
-      final wordSeed = (seed + i * 7) % 100;
-      _TasmiStatus status;
-
-      if (wordSeed < (baseAccuracy * 70).round()) {
-        status = _TasmiStatus.correct;
-        _correctCount++;
-      } else if (wordSeed < 85) {
-        status = _TasmiStatus.wrong;
-        _wrongCount++;
-      } else {
-        status = _TasmiStatus.missing;
-        _missingCount++;
-      }
-
-      return _TasmiWord(word: words[i], status: status);
-    });
-
-    _accuracy = words.isNotEmpty ? _correctCount / words.length : 0;
-
-    setState(() => _phase = _TasmiPhase.replay);
+    await asr.cleanup();
+    if (mounted) setState(() => _phase = _TasmiPhase.replay);
   }
 
   void _finish() {
+    final result = _asrResult;
     final duration = DateTime.now().difference(_startTime).inSeconds;
-    final total = widget.verse.words.length;
-    final score = total > 0 ? (_correctCount / total * 100).round() : 0;
+    final score = result != null ? (result.accuracy * 100).round() : 0;
 
     widget.onComplete(StepResult(
       step: WirdStep.tasmi,
@@ -139,7 +137,6 @@ class _StepTasmiState extends State<StepTasmi> {
             'Récitation de mémoire',
             style: HifzTypo.body(color: HifzColors.textLight),
           ),
-
           const SizedBox(height: 28),
 
           AnimatedSwitcher(
@@ -161,7 +158,6 @@ class _StepTasmiState extends State<StepTasmi> {
     return Column(
       key: const ValueKey('prompt'),
       children: [
-        // Référence seule — pas de texte !
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           decoration: BoxDecoration(
@@ -188,16 +184,12 @@ class _StepTasmiState extends State<StepTasmi> {
             ],
           ),
         ),
-
         const SizedBox(height: 32),
-
         Text(
           'Récite ce verset de mémoire',
           style: HifzTypo.body(color: HifzColors.textMedium),
         ),
-
         const SizedBox(height: 20),
-
         GestureDetector(
           onTap: _startRecording,
           child: Container(
@@ -253,30 +245,54 @@ class _StepTasmiState extends State<StepTasmi> {
       children: [
         const SizedBox(height: 40),
         SizedBox(
-          width: 48, height: 48,
+          width: 48,
+          height: 48,
           child: CircularProgressIndicator(
             strokeWidth: 3,
             valueColor: AlwaysStoppedAnimation(HifzColors.emerald),
           ),
         ),
         const SizedBox(height: 16),
-        Text('Analyse de ta récitation...', style: HifzTypo.body(color: HifzColors.textMedium)),
+        Text('Analyse de ta récitation...',
+            style: HifzTypo.body(color: HifzColors.textMedium)),
       ],
     );
   }
 
   // ── Replay avec résultat mot par mot ──
   Widget _buildReplay() {
+    final result = _asrResult;
+    if (result == null) return const SizedBox.shrink();
+
+    final accuracy = result.accuracy;
+    final isSimulated = result.transcription == '(simulation)';
+
     return Column(
       key: const ValueKey('replay'),
       children: [
         // Score
         Text(
-          '${(_accuracy * 100).round()}%',
+          '${(accuracy * 100).round()}%',
           style: HifzTypo.score(
-            color: _accuracy >= 0.7 ? HifzColors.correct : HifzColors.wrong,
+            color: accuracy >= 0.7 ? HifzColors.correct : HifzColors.wrong,
           ),
         ),
+
+        if (isSimulated) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: HifzColors.goldMuted,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Mode hors-ligne',
+              style: HifzTypo.body(color: HifzColors.gold)
+                  .copyWith(fontSize: 11),
+            ),
+          ),
+        ],
 
         const SizedBox(height: 16),
 
@@ -290,25 +306,27 @@ class _StepTasmiState extends State<StepTasmi> {
             textDirection: TextDirection.rtl,
             spacing: 6,
             runSpacing: 16,
-            children: _wordResults.asMap().entries.map((entry) {
+            children: result.wordResults.asMap().entries.map((entry) {
               final idx = entry.key;
-              final tw = entry.value;
+              final wr = entry.value;
               final isActive = idx == _activeWordIdx;
 
               Color color;
-              switch (tw.status) {
-                case _TasmiStatus.correct:
+              switch (wr.status) {
+                case AsrWordStatus.correct:
                   color = HifzColors.correct;
-                case _TasmiStatus.wrong:
+                case AsrWordStatus.close:
+                  color = HifzColors.close;
+                case AsrWordStatus.wrong:
                   color = HifzColors.wrong;
-                case _TasmiStatus.missing:
+                case AsrWordStatus.missing:
                   color = HifzColors.missing;
-                default:
-                  color = HifzColors.textDark;
+                case AsrWordStatus.extra:
+                  color = HifzColors.textLight;
               }
 
               return Text(
-                tw.word,
+                wr.word,
                 style: HifzTypo.verse(
                   size: isActive ? 28 : 24,
                   color: isActive ? HifzColors.karaokeActive : color,
@@ -359,7 +377,8 @@ class _LegendDot extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(shape: BoxShape.circle, color: color),
           ),
           const SizedBox(width: 4),
@@ -368,14 +387,4 @@ class _LegendDot extends StatelessWidget {
       ),
     );
   }
-}
-
-enum _TasmiStatus { correct, wrong, missing, pending }
-
-class _TasmiWord {
-  _TasmiWord({required this.word, required this.status, this.startTime, this.endTime});
-  final String word;
-  final _TasmiStatus status;
-  final double? startTime;
-  final double? endTime;
 }

@@ -78,8 +78,10 @@ class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
   void _onStepComplete(StepResult result) {
     _stepResults.add(result);
 
-    // ── Soumettre le résultat de l'étape au backend ──
-    _submitStepToBackend(result);
+    // ── Soumettre le résultat de l'étape au backend (sauf Nour = écoute pure) ──
+    if (result.step != WirdStep.nour) {
+      _submitStepToBackend(result);
+    }
 
     // ── Soumettre les exercices individuels (TAMRIN) ──
     if (result.step == WirdStep.tamrin) {
@@ -90,10 +92,18 @@ class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
 
     final idx = _steps.indexOf(_currentStep);
     if (idx + 1 < _steps.length) {
-      setState(() => _currentStep = _steps[idx + 1]);
+      final nextStep = _steps[idx + 1];
+      // Si on arrive à Natija, le verset est considéré comme complété.
+      // On prépare le résultat pour que Natija puisse l'afficher,
+      // et on notifie le parent immédiatement pour sauvegarder la progression.
+      if (nextStep == WirdStep.natija) {
+        _prepareResult();
+      }
+      setState(() => _currentStep = nextStep);
     } else {
-      // Flow terminé → calculer le résultat
-      _finishFlow();
+      // Dernier step sans Natija (ex: flow raccourci)
+      _prepareResult();
+      widget.onComplete?.call(_verseResult!);
     }
   }
 
@@ -127,7 +137,12 @@ class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
     }
   }
 
-  void _finishFlow() {
+  VerseSessionResult? _verseResult;
+
+  /// Prépare le résultat du verset (appelé avant Natija).
+  void _prepareResult() {
+    if (_verseResult != null) return; // Déjà calculé
+
     final exerciseScores = _stepResults
         .where((r) => r.score > 0)
         .map((r) => r.score)
@@ -140,15 +155,19 @@ class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
     final stars = avgScore >= 90 ? 3 : avgScore >= 70 ? 2 : avgScore >= 50 ? 1 : 0;
     final xp = stars * 15 + avgScore ~/ 5;
 
-    final result = VerseSessionResult(
+    _verseResult = VerseSessionResult(
       verse: widget.verse,
       stepResults: _stepResults,
       finalScore: avgScore,
       stars: stars,
       xpEarned: xp,
     );
+  }
 
-    widget.onComplete?.call(result);
+  /// Appelé par Natija.onFinish → notifie le parent pour avancer au verset suivant.
+  void _finishFlow() {
+    _prepareResult();
+    widget.onComplete?.call(_verseResult!);
   }
 
   @override
@@ -254,6 +273,12 @@ class _WirdVerseFlowScreenState extends ConsumerState<WirdVerseFlowScreen> {
   }
 
   void _showExitConfirmation() {
+    // Si on est sur Natija, le verset est déjà complété → pas de warning
+    if (_verseResult != null) {
+      widget.onComplete?.call(_verseResult!);
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(

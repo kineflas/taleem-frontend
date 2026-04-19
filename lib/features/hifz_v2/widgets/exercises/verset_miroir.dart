@@ -1,63 +1,47 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../models/hifz_v2_theme.dart';
 import '../../models/wird_models.dart';
+import '../../providers/hifz_v2_provider.dart';
+import '../../services/asr_service.dart';
 
 /// Le Verset Miroir (المرآة) — Récitation + analyse ASR.
 ///
-/// Intègre la mécanique du /replay développée dans le prototype ASR :
-/// 1. L'élève récite le verset (enregistrement audio)
+/// 1. L'élève récite le verset (enregistrement audio réel)
 /// 2. L'audio est envoyé au serveur ASR pour validation
-/// 3. Le résultat mot par mot s'affiche avec code couleur :
-///    - Vert : correct (similarité 1.0)
-///    - Orange : proche (similarité >= 0.6)
-///    - Rouge souligné : erreur
-///    - Gris barré : mot oublié
-/// 4. L'élève peut réécouter son enregistrement synchronisé
-///
-/// Ce widget est inline dans le flux — pas de nouvel écran.
-class VersetMiroir extends StatefulWidget {
+/// 3. Le résultat mot par mot s'affiche avec code couleur
+/// 4. Fallback simulation si le serveur ASR est inaccessible
+class VersetMiroir extends ConsumerStatefulWidget {
   const VersetMiroir({
     super.key,
     required this.verse,
     required this.onComplete,
-    this.asrServerUrl = _defaultAsrUrl,
   });
 
   final EnrichedVerse verse;
   final void Function(ExerciseResult result) onComplete;
-  final String asrServerUrl;
-
-  // URL de production par défaut
-  static const String _defaultAsrUrl = 'https://asr.taleem.cksyndic.ma';
 
   @override
-  State<VersetMiroir> createState() => _VersetMiroirState();
+  ConsumerState<VersetMiroir> createState() => _VersetMiroirState();
 }
 
 enum _MiroirPhase { ready, recording, analyzing, result }
 
-class _VersetMiroirState extends State<VersetMiroir> {
+class _VersetMiroirState extends ConsumerState<VersetMiroir> {
   _MiroirPhase _phase = _MiroirPhase.ready;
   final _startTime = DateTime.now();
 
   // Résultat de l'analyse
-  double _accuracy = 0;
-  List<_WordAnalysis> _wordResults = [];
-  int _correctWords = 0;
-  int _closeWords = 0;
-  int _wrongWords = 0;
-  int _missingWords = 0;
-
-  // Audio replay
-  final AudioPlayer _replayPlayer = AudioPlayer();
-  bool _isReplaying = false;
-  int _activeWordIdx = -1;
+  AsrValidationResult? _asrResult;
 
   // Timer enregistrement
   Timer? _recTimer;
   int _recSeconds = 0;
+
+  // Audio replay
+  final AudioPlayer _replayPlayer = AudioPlayer();
 
   @override
   void dispose() {
@@ -66,166 +50,82 @@ class _VersetMiroirState extends State<VersetMiroir> {
     super.dispose();
   }
 
-  void _startRecording() {
+  Future<void> _startRecording() async {
+    final asr = ref.read(asrServiceProvider);
+
+    try {
+      await asr.startRecording();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur micro : $e')),
+      );
+      return;
+    }
+
     setState(() {
       _phase = _MiroirPhase.recording;
       _recSeconds = 0;
     });
+
     _recTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       setState(() => _recSeconds++);
+      // Auto-stop après 30 secondes
+      if (_recSeconds >= 30) _stopRecording();
     });
-    // Note: l'enregistrement réel utilise record ou flutter_sound
-    // Pour le prototype, on simule puis on appelle l'API ASR
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _recTimer?.cancel();
+    if (_phase != _MiroirPhase.recording) return;
+
     setState(() => _phase = _MiroirPhase.analyzing);
-    // Simuler l'envoi au serveur ASR et la réception du résultat
-    _analyzeRecitation();
-  }
 
-  Future<void> _analyzeRecitation() async {
-    // TODO: Intégrer l'enregistrement audio réel (flutter_sound / record)
-    // puis envoyer au serveur ASR :
-    //
-    // final formData = FormData.fromMap({
-    //   'audio': MultipartFile.fromBytes(audioBytes, filename: 'rec.webm'),
-    //   'expected_text': widget.verse.textAr,
-    // });
-    // final response = await dio.post(
-    //   '${widget.asrServerUrl}/api/validate-replay',
-    //   data: formData,
-    // );
-    // if (response.statusCode == 200) {
-    //   _applyApiResults(response.data);
-    //   setState(() => _phase = _MiroirPhase.result);
-    //   return;
-    // }
+    final asr = ref.read(asrServiceProvider);
+    final audioPath = await asr.stopRecording();
 
-    await Future.delayed(const Duration(seconds: 2));
-
-    // ── Simulation réaliste en attendant le serveur ASR ──
-    // Donne un score basé sur la durée d'enregistrement vs la longueur du verset
-    final words = widget.verse.words;
-    final expectedDuration = words.length * 1.2; // ~1.2s par mot
-    final ratio = (expectedDuration > 0 && _recSeconds > 0)
-        ? (_recSeconds / expectedDuration).clamp(0.3, 1.5)
-        : 0.5;
-
-    // Plus la durée est proche de la durée attendue, meilleur est le score
-    final baseAccuracy = 1.0 - (ratio - 1.0).abs();
-    // Ajout d'un facteur aléatoire léger basé sur le numéro du verset
-    final seed = widget.verse.surahNumber * 100 + widget.verse.verseNumber + _recSeconds;
-    final jitter = ((seed % 20) - 10) / 100.0; // -0.10 à +0.10
-
-    _accuracy = (baseAccuracy + jitter).clamp(0.4, 0.95);
-
-    _wordResults.clear();
-    _correctWords = 0;
-    _closeWords = 0;
-    _wrongWords = 0;
-    _missingWords = 0;
-
-    for (int i = 0; i < words.length; i++) {
-      _WordStatus status;
-      final wordSeed = (seed + i * 7) % 100;
-
-      if (wordSeed < (_accuracy * 70).round()) {
-        status = _WordStatus.correct;
-        _correctWords++;
-      } else if (wordSeed < (_accuracy * 90).round()) {
-        status = _WordStatus.close;
-        _closeWords++;
-      } else if (wordSeed < 90) {
-        status = _WordStatus.wrong;
-        _wrongWords++;
-      } else {
-        status = _WordStatus.missing;
-        _missingWords++;
-      }
-
-      _wordResults.add(_WordAnalysis(
-        word: words[i],
-        status: status,
-        similarity: status == _WordStatus.correct
-            ? 1.0
-            : status == _WordStatus.close
-                ? 0.7
-                : 0.0,
-        heard: null,
-        startTime: null,
-        endTime: null,
-      ));
+    if (audioPath == null || audioPath.isEmpty) {
+      // Pas de fichier → simulation
+      _asrResult = AsrValidationResult.simulated(
+        words: widget.verse.words,
+        recSeconds: _recSeconds,
+        surahNumber: widget.verse.surahNumber,
+        verseNumber: widget.verse.verseNumber,
+      );
+      if (mounted) setState(() => _phase = _MiroirPhase.result);
+      return;
     }
 
-    setState(() => _phase = _MiroirPhase.result);
-  }
+    // Envoyer au serveur ASR
+    _asrResult = await asr.validateRecording(
+      audioPath: audioPath,
+      expectedText: widget.verse.textAr,
+      words: widget.verse.words,
+      recSeconds: _recSeconds,
+      surahNumber: widget.verse.surahNumber,
+      verseNumber: widget.verse.verseNumber,
+    );
 
-  /// Mise à jour des résultats depuis la réponse API réelle.
-  void _applyApiResults(Map<String, dynamic> apiResponse) {
-    final wordResults = apiResponse['word_results'] as List;
-    final expectedWords = widget.verse.textAr.split(RegExp(r'\s+'));
+    // Nettoyer le fichier temporaire
+    await asr.cleanup();
 
-    _wordResults.clear();
-    _correctWords = 0;
-    _closeWords = 0;
-    _wrongWords = 0;
-    _missingWords = 0;
-
-    for (final wr in wordResults) {
-      final status = switch (wr['status']) {
-        'correct' => _WordStatus.correct,
-        'wrong' => _WordStatus.wrong,
-        'missing' => _WordStatus.missing,
-        'extra' => _WordStatus.extra,
-        _ => _WordStatus.pending,
-      };
-
-      final sim = (wr['similarity'] as num?)?.toDouble();
-      final effectiveStatus = status == _WordStatus.correct && sim != null && sim < 1.0
-          ? _WordStatus.close
-          : status;
-
-      switch (effectiveStatus) {
-        case _WordStatus.correct:
-          _correctWords++;
-        case _WordStatus.close:
-          _closeWords++;
-        case _WordStatus.wrong:
-          _wrongWords++;
-        case _WordStatus.missing:
-          _missingWords++;
-        default:
-          break;
-      }
-
-      final pos = wr['position'] as int? ?? -1;
-      _wordResults.add(_WordAnalysis(
-        word: pos >= 0 && pos < expectedWords.length
-            ? expectedWords[pos]
-            : wr['word'] as String,
-        status: effectiveStatus,
-        similarity: sim,
-        heard: wr['expected'] as String?,
-        startTime: (wr['start_time'] as num?)?.toDouble(),
-        endTime: (wr['end_time'] as num?)?.toDouble(),
-      ));
-    }
-
-    _accuracy = apiResponse['accuracy'] as double;
-    setState(() {});
+    if (mounted) setState(() => _phase = _MiroirPhase.result);
   }
 
   void _completeExercise() {
+    final result = _asrResult;
+    if (result == null) return;
+
     final ms = DateTime.now().difference(_startTime).inMilliseconds;
-    final score = (_accuracy * 100).round();
+    final score = (result.accuracy * 100).round();
+
     widget.onComplete(ExerciseResult(
       type: ExerciseType.versetMiroir,
-      isCorrect: _accuracy >= 0.7,
+      isCorrect: result.accuracy >= 0.7,
       responseTimeMs: ms,
       score: score,
-      details: '$_correctWords correct, $_wrongWords erreur(s), $_missingWords oublié(s)',
+      details:
+          '${result.correctWords} correct, ${result.wrongWords} erreur(s), ${result.missingWords} oublié(s)',
     ));
   }
 
@@ -239,7 +139,8 @@ class _VersetMiroirState extends State<VersetMiroir> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.mic_none, size: 16, color: HifzColors.emerald.withOpacity(0.7)),
+              Icon(Icons.mic_none,
+                  size: 16, color: HifzColors.emerald.withOpacity(0.7)),
               const SizedBox(width: 6),
               Text(
                 'Le Verset Miroir',
@@ -252,7 +153,6 @@ class _VersetMiroirState extends State<VersetMiroir> {
             'Récite puis découvre ton résultat',
             style: HifzTypo.body(color: HifzColors.textLight),
           ),
-
           const SizedBox(height: 20),
 
           // ── Contenu selon la phase ──
@@ -275,7 +175,6 @@ class _VersetMiroirState extends State<VersetMiroir> {
     return Column(
       key: const ValueKey('ready'),
       children: [
-        // Verset affiché faiblement (rappel visuel)
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(20),
@@ -287,17 +186,12 @@ class _VersetMiroirState extends State<VersetMiroir> {
             style: HifzTypo.verse(size: 22, color: HifzColors.textLight),
           ),
         ),
-
         const SizedBox(height: 24),
-
         Text(
           'Récite le verset de mémoire',
           style: HifzTypo.body(color: HifzColors.textMedium),
         ),
-
         const SizedBox(height: 16),
-
-        // Bouton enregistrement
         GestureDetector(
           onTap: _startRecording,
           child: Container(
@@ -323,22 +217,16 @@ class _VersetMiroirState extends State<VersetMiroir> {
     return Column(
       key: const ValueKey('recording'),
       children: [
-        // Timer
         Text(
           '${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
           style: HifzTypo.score(color: HifzColors.wrong),
         ),
-
         const SizedBox(height: 16),
-
         Text(
           'Récite maintenant...',
           style: HifzTypo.body(color: HifzColors.textMedium),
         ),
-
         const SizedBox(height: 24),
-
-        // Bouton stop
         GestureDetector(
           onTap: _stopRecording,
           child: Container(
@@ -381,23 +269,45 @@ class _VersetMiroirState extends State<VersetMiroir> {
 
   // ── Phase : Résultat ──
   Widget _buildResult() {
+    final result = _asrResult;
+    if (result == null) return const SizedBox.shrink();
+
+    final accuracy = result.accuracy;
+    final isSimulated = result.transcription == '(simulation)';
+
     return Column(
       key: const ValueKey('result'),
       children: [
         // Score
         Text(
-          '${(_accuracy * 100).round()}%',
+          '${(accuracy * 100).round()}%',
           style: HifzTypo.score(
-            color: _accuracy >= 0.7 ? HifzColors.correct : HifzColors.wrong,
+            color: accuracy >= 0.7 ? HifzColors.correct : HifzColors.wrong,
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          _accuracy >= 0.7 ? 'Bien récité' : 'À retravailler',
+          accuracy >= 0.7 ? 'Bien récité' : 'À retravailler',
           style: HifzTypo.body(
-            color: _accuracy >= 0.7 ? HifzColors.correct : HifzColors.wrong,
+            color: accuracy >= 0.7 ? HifzColors.correct : HifzColors.wrong,
           ),
         ),
+
+        // Badge simulation
+        if (isSimulated) ...[
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: HifzColors.goldMuted,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Mode hors-ligne (simulation)',
+              style: HifzTypo.body(color: HifzColors.gold).copyWith(fontSize: 11),
+            ),
+          ),
+        ],
 
         const SizedBox(height: 16),
 
@@ -405,10 +315,9 @@ class _VersetMiroirState extends State<VersetMiroir> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _StatChip('$_correctWords', 'correct', HifzColors.correct),
-            if (_closeWords > 0) _StatChip('$_closeWords', 'proche', HifzColors.close),
-            _StatChip('$_wrongWords', 'erreur', HifzColors.wrong),
-            _StatChip('$_missingWords', 'oublié', HifzColors.missing),
+            _StatChip('${result.correctWords}', 'correct', HifzColors.correct),
+            _StatChip('${result.wrongWords}', 'erreur', HifzColors.wrong),
+            _StatChip('${result.missingWords}', 'oublié', HifzColors.missing),
           ],
         ),
 
@@ -424,9 +333,8 @@ class _VersetMiroirState extends State<VersetMiroir> {
             textDirection: TextDirection.rtl,
             spacing: 4,
             runSpacing: 16,
-            children: _wordResults.asMap().entries.map((entry) {
-              final wa = entry.value;
-              return _buildWordResult(wa);
+            children: result.wordResults.map((wr) {
+              return _buildWordResult(wr);
             }).toList(),
           ),
         ),
@@ -446,45 +354,42 @@ class _VersetMiroirState extends State<VersetMiroir> {
     );
   }
 
-  Widget _buildWordResult(_WordAnalysis wa) {
+  Widget _buildWordResult(AsrWordResult wr) {
     Color textColor;
     TextDecoration? decoration;
 
-    switch (wa.status) {
-      case _WordStatus.correct:
+    switch (wr.status) {
+      case AsrWordStatus.correct:
         textColor = HifzColors.correct;
-        break;
-      case _WordStatus.close:
+      case AsrWordStatus.close:
         textColor = HifzColors.close;
-        break;
-      case _WordStatus.wrong:
+      case AsrWordStatus.wrong:
         textColor = HifzColors.wrong;
         decoration = TextDecoration.underline;
-        break;
-      case _WordStatus.missing:
+      case AsrWordStatus.missing:
         textColor = HifzColors.missing;
         decoration = TextDecoration.lineThrough;
-        break;
-      default:
-        textColor = HifzColors.textDark;
+      case AsrWordStatus.extra:
+        textColor = HifzColors.textLight;
     }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          wa.word,
+          wr.word,
           style: HifzTypo.verse(size: 24, color: textColor).copyWith(
             decoration: decoration,
             decorationColor: textColor,
           ),
           textDirection: TextDirection.rtl,
         ),
-        // Mot entendu sous les erreurs
-        if (wa.heard != null && (wa.status == _WordStatus.wrong || wa.status == _WordStatus.close))
+        if (wr.expected != null &&
+            (wr.status == AsrWordStatus.wrong ||
+                wr.status == AsrWordStatus.close))
           Text(
-            wa.heard!,
-            style: TextStyle(
+            wr.expected!,
+            style: const TextStyle(
               fontFamily: 'Amiri',
               fontSize: 11,
               color: HifzColors.textLight,
@@ -510,30 +415,14 @@ class _StatChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Column(
         children: [
-          Text(count, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: color)),
-          Text(label, style: TextStyle(fontSize: 10, color: color.withOpacity(0.7))),
+          Text(count,
+              style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700, color: color)),
+          Text(label,
+              style:
+                  TextStyle(fontSize: 10, color: color.withOpacity(0.7))),
         ],
       ),
     );
   }
-}
-
-enum _WordStatus { correct, close, wrong, missing, extra, pending }
-
-class _WordAnalysis {
-  const _WordAnalysis({
-    required this.word,
-    required this.status,
-    this.similarity,
-    this.heard,
-    this.startTime,
-    this.endTime,
-  });
-
-  final String word;
-  final _WordStatus status;
-  final double? similarity;
-  final String? heard;    // Ce que le modèle a entendu
-  final double? startTime;
-  final double? endTime;
 }

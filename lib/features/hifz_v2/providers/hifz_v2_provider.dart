@@ -10,12 +10,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import '../data/hifz_v2_service.dart';
 import '../models/wird_models.dart';
+import '../services/asr_service.dart';
 
 // ── Service Provider ────────────────────────────────────────────────
 
 final hifzV2ServiceProvider = Provider<HifzV2Service>((ref) {
   final dio = ref.watch(dioProvider);
   return HifzV2Service(dio);
+});
+
+// ── ASR Service Provider ────────────────────────────────────────────
+
+final asrServiceProvider = Provider<AsrService>((ref) {
+  final service = AsrService();
+  ref.onDispose(() => service.dispose());
+  return service;
 });
 
 // ── Wird du jour ────────────────────────────────────────────────────
