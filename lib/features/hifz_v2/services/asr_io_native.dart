@@ -19,5 +19,5 @@ Future<void> deleteFile(String path) async {
 /// Retourne un chemin temporaire pour l'enregistrement.
 Future<String> getTempRecordingPath() async {
   final dir = await getTemporaryDirectory();
-  return '${dir.path}/asr_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+  return '${dir.path}/asr_recording_${DateTime.now().millisecondsSinceEpoch}.wav';
 }

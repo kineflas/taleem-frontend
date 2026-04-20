@@ -236,11 +236,12 @@ class AsrService {
       await _recorder.start(config, path: '');
     } else {
       _currentRecordingPath = await getTempRecordingPath();
+      // WAV 16kHz mono — pas de compression, le serveur ASR lit directement
+      // sans conversion ffmpeg (économise ~200-500ms par requête côté serveur).
       const config = RecordConfig(
-        encoder: AudioEncoder.aacLc,
+        encoder: AudioEncoder.wav,
         sampleRate: 16000,
         numChannels: 1,
-        bitRate: 64000,
       );
       await _recorder.start(config, path: _currentRecordingPath!);
     }
@@ -298,10 +299,11 @@ class AsrService {
           contentType: DioMediaType.parse('audio/webm'),
         );
       } else {
-        // Mobile/Desktop : envoyer depuis le fichier
+        // Mobile/Desktop : envoyer le WAV 16kHz directement (pas de conversion serveur)
         audioFile = await MultipartFile.fromFile(
           audioPath,
-          filename: 'recording.m4a',
+          filename: 'recording.wav',
+          contentType: DioMediaType.parse('audio/wav'),
         );
       }
 
@@ -359,7 +361,8 @@ class AsrService {
       } else {
         audioFile = await MultipartFile.fromFile(
           audioPath,
-          filename: 'recording.m4a',
+          filename: 'recording.wav',
+          contentType: DioMediaType.parse('audio/wav'),
         );
       }
 
