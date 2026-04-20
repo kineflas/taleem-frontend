@@ -116,6 +116,36 @@ class HifzV2Service {
         response.data as Map<String, dynamic>);
   }
 
+  // ── Checkpoint (Phase 2) ─────────────────────────────────────────
+
+  /// Termine un checkpoint et met à jour le SRS de tous les versets du groupe.
+  Future<CheckpointCompleteResponse> completeCheckpoint({
+    String? wirdSessionId,
+    required int surahNumber,
+    required int verseStart,
+    required int verseEnd,
+    required int tartibScore,
+    required int takamulScore,
+    required int tasmiScore,
+    required int durationSeconds,
+  }) async {
+    final response = await _dio.post(
+      ApiConstants.studentHifzCheckpointComplete,
+      data: {
+        if (wirdSessionId != null) 'wird_session_id': wirdSessionId,
+        'surah_number': surahNumber,
+        'verse_start': verseStart,
+        'verse_end': verseEnd,
+        'tartib_score': tartibScore,
+        'takamul_score': takamulScore,
+        'tasmi_score': tasmiScore,
+        'duration_seconds': durationSeconds,
+      },
+    );
+    return CheckpointCompleteResponse.fromJson(
+        response.data as Map<String, dynamic>);
+  }
+
   // ── Contenu enrichi ──────────────────────────────────────────────
 
   /// Récupère le contenu enrichi d'une sourate (texte, traductions, timings).
@@ -493,6 +523,33 @@ class SuggestedSurahsResponse {
         reviewDueSurahs: (json['review_due_surahs'] as List? ?? [])
             .map((s) => SuggestedSurah.fromJson(s as Map<String, dynamic>))
             .toList(),
+      );
+}
+
+class CheckpointCompleteResponse {
+  CheckpointCompleteResponse({
+    required this.globalScore,
+    required this.stars,
+    required this.xpEarned,
+    required this.versesUpdated,
+    required this.scoresByStep,
+  });
+
+  final int globalScore;
+  final int stars;
+  final int xpEarned;
+  final int versesUpdated;
+  final Map<String, int> scoresByStep;
+
+  factory CheckpointCompleteResponse.fromJson(Map<String, dynamic> json) =>
+      CheckpointCompleteResponse(
+        globalScore: json['global_score'] as int,
+        stars: json['stars'] as int,
+        xpEarned: json['xp_earned'] as int,
+        versesUpdated: json['verses_updated'] as int,
+        scoresByStep: Map<String, int>.from(
+            (json['scores_by_step'] as Map).map(
+                (k, v) => MapEntry(k.toString(), (v as num).toInt()))),
       );
 }
 

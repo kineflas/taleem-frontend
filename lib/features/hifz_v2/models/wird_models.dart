@@ -67,6 +67,16 @@ enum WirdBloc {
   baid,   // Révision lointaine (J+7+) — 1 exercice + récitation
 }
 
+// ── Étapes du Checkpoint (Phase 2) ───────────────────────────────
+
+enum CheckpointStep {
+  istima,   // Écoute globale (pas de score)
+  tartib,   // Ordonnancement des versets
+  takamul,  // Complétion multi-versets (trous)
+  tasmi,    // Récitation cumulée
+  natija,   // Résultats du checkpoint
+}
+
 // ── Verset enrichi ────────────────────────────────────────────────
 
 class EnrichedVerse {
@@ -223,4 +233,24 @@ class VerseSessionResult {
   final int finalScore;  // 0-100 combiné
   final int stars;       // 1-3
   final int xpEarned;
+}
+
+// ── Résultat Checkpoint (Phase 2) ────────────────────────────────
+
+class CheckpointResult {
+  const CheckpointResult({
+    required this.verses,
+    required this.scoresByStep,
+    required this.globalScore,
+    required this.stars,
+    required this.xpEarned,
+    this.versesUpdated = 0,
+  });
+
+  final List<EnrichedVerse> verses;
+  final Map<String, int> scoresByStep; // {"tartib": 80, "takamul": 90, "tasmi": 85}
+  final int globalScore;
+  final int stars;
+  final int xpEarned;
+  final int versesUpdated;
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
+import 'checkpoint_flow_screen.dart';
 import 'wird_verse_flow_screen.dart';
 
 /// Écran principal du Wird quotidien.
@@ -31,6 +32,16 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
   bool _wirdComplete = false;
   bool _autoAdvance = true; // Mode Enchaînement : auto-avance au verset suivant
 
+  // ── Checkpoint tracking ──
+  /// Nombre de versets JADID complétés depuis le dernier checkpoint
+  int _jadidSinceCheckpoint = 0;
+  /// Seuil de déclenchement du checkpoint (tous les N versets JADID)
+  static const int _checkpointThreshold = 3;
+  /// true quand on affiche le CheckpointFlowScreen
+  bool _inCheckpoint = false;
+  /// Versets accumulés pour le prochain checkpoint
+  final List<EnrichedVerse> _checkpointVerses = [];
+
   List<EnrichedVerse> get _currentVerses => switch (_currentBloc) {
         WirdBloc.jadid => widget.session.jadidVerses,
         WirdBloc.qarib => widget.session.qaribVerses,
@@ -56,19 +67,60 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
   void _onVerseComplete(VerseSessionResult result) {
     _results.add(result);
 
+    // ── Checkpoint tracking pour le bloc JADID ──
+    if (_currentBloc == WirdBloc.jadid) {
+      _jadidSinceCheckpoint++;
+      _checkpointVerses.add(_currentVerses[_currentVerseIdx]);
+    }
+
+    final shouldCheckpoint = _currentBloc == WirdBloc.jadid &&
+        _jadidSinceCheckpoint >= _checkpointThreshold;
+
     if (_currentVerseIdx + 1 < _currentVerses.length) {
       // Avancer au verset suivant dans le même bloc
       ref.read(wirdSessionProvider.notifier).nextVerse();
       setState(() {
         _currentVerseIdx++;
-        // Mode Enchaînement : rester dans le flow (auto-avance)
-        // Mode Classique : revenir à l'overview
-        _isInFlow = _autoAdvance;
+
+        if (shouldCheckpoint) {
+          // Lancer le checkpoint avant de continuer
+          _inCheckpoint = true;
+          _isInFlow = false;
+        } else {
+          // Mode Enchaînement : rester dans le flow (auto-avance)
+          // Mode Classique : revenir à l'overview
+          _isInFlow = _autoAdvance;
+        }
       });
     } else {
-      // Bloc terminé → passer au suivant
-      _advanceBloc();
+      // Bloc terminé — déclencher un checkpoint si des versets sont en attente
+      if (_currentBloc == WirdBloc.jadid && _checkpointVerses.isNotEmpty) {
+        setState(() {
+          _inCheckpoint = true;
+          _isInFlow = false;
+        });
+      } else {
+        _advanceBloc();
+      }
     }
+  }
+
+  /// Appelé quand le CheckpointFlowScreen se termine
+  void _onCheckpointComplete(CheckpointResult result) {
+    setState(() {
+      _inCheckpoint = false;
+      _jadidSinceCheckpoint = 0;
+      _checkpointVerses.clear();
+
+      // Vérifier si le bloc JADID était terminé avant le checkpoint
+      if (_currentVerseIdx >= _currentVerses.length) {
+        // Le bloc est fini → avancer au suivant
+        _advanceBloc();
+      } else {
+        // Reprendre le flow
+        _isInFlow = _autoAdvance;
+      }
+    });
   }
 
   void _advanceBloc() {
@@ -76,6 +128,10 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
     switch (_currentBloc) {
       case WirdBloc.jadid:
+        // Passer au bloc suivant et réinitialiser le compteur checkpoint
+        _jadidSinceCheckpoint = 0;
+        _checkpointVerses.clear();
+
         if (widget.session.qaribVerses.isNotEmpty) {
           notifier.nextBloc();
           setState(() {
@@ -129,6 +185,15 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Checkpoint en cours ──
+    if (_inCheckpoint && _checkpointVerses.isNotEmpty) {
+      return CheckpointFlowScreen(
+        verses: List.of(_checkpointVerses),
+        reciterFolder: widget.session.reciterFolder,
+        onComplete: _onCheckpointComplete,
+      );
+    }
+
     if (_isInFlow && _currentVerses.isNotEmpty) {
       return WirdVerseFlowScreen(
         verse: _currentVerses[_currentVerseIdx],
