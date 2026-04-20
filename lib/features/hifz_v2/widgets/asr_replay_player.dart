@@ -11,6 +11,7 @@
 ///
 /// Nécessite des WordResults avec startTime/endTime (endpoint /api/validate-replay).
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
