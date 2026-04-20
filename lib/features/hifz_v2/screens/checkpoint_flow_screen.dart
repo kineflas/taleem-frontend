@@ -13,6 +13,7 @@ import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
 import '../services/audio_orchestrator.dart';
+import '../widgets/exercises/exercise_rabita.dart';
 import '../widgets/exercises/exercise_tartib.dart';
 import '../widgets/exercises/exercise_takamul.dart';
 
@@ -40,6 +41,7 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
   // Scores par étape
   int _tartibScore = 0;
   int _takamulScore = 0;
+  int _rabitaScore = 0;
   int _tasmiScore = 0;
 
   // Audio pour Istima'
@@ -106,6 +108,7 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
         verseEnd: lastVerse.verseNumber,
         tartibScore: _tartibScore,
         takamulScore: _takamulScore,
+        rabitaScore: _rabitaScore,
         tasmiScore: _tasmiScore,
         durationSeconds: duration,
       );
@@ -113,8 +116,12 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
       // Ne pas bloquer l'UI
     }
 
+    // Phase 3 weights with Rabita: tartib 15%, takamul 25%, rabita 25%, tasmi 35%
     final globalScore = (
-      _tartibScore * 0.25 + _takamulScore * 0.35 + _tasmiScore * 0.40
+      _tartibScore * 0.15
+      + _takamulScore * 0.25
+      + _rabitaScore * 0.25
+      + _tasmiScore * 0.35
     ).round().clamp(0, 100);
 
     final stars = globalScore >= 90 ? 3 : globalScore >= 70 ? 2 : globalScore >= 50 ? 1 : 0;
@@ -125,6 +132,7 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
       scoresByStep: {
         'tartib': _tartibScore,
         'takamul': _takamulScore,
+        'rabita': _rabitaScore,
         'tasmi': _tasmiScore,
       },
       globalScore: globalScore,
@@ -200,6 +208,7 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
       CheckpointStep.istima: 'Istima\'',
       CheckpointStep.tartib: 'Tartib',
       CheckpointStep.takamul: 'Takamul',
+      CheckpointStep.rabita: 'Rabita',
       CheckpointStep.tasmi: 'Tasmi\'',
       CheckpointStep.natija: 'Natija',
     };
@@ -269,6 +278,14 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
             _advanceStep();
           },
         ),
+      CheckpointStep.rabita => ExerciseRabita(
+          key: const ValueKey('rabita'),
+          verses: widget.verses,
+          onComplete: (score) {
+            _rabitaScore = score;
+            _advanceStep();
+          },
+        ),
       CheckpointStep.tasmi => _StepTasmiGrouped(
           key: const ValueKey('tasmi'),
           verses: widget.verses,
@@ -281,6 +298,7 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
           key: const ValueKey('natija'),
           tartibScore: _tartibScore,
           takamulScore: _takamulScore,
+          rabitaScore: _rabitaScore,
           tasmiScore: _tasmiScore,
           verses: widget.verses,
           onFinish: () => _finishCheckpoint(),
@@ -477,7 +495,7 @@ class _AnimatedBarState extends State<_AnimatedBar>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
+    return _AnimatedWaveWidget(
       animation: _ctrl,
       builder: (_, __) {
         return Container(
@@ -494,10 +512,9 @@ class _AnimatedBarState extends State<_AnimatedBar>
   }
 }
 
-/// AnimatedBuilder helper.
-class AnimatedBuilder extends AnimatedWidget {
-  const AnimatedBuilder({
-    super.key,
+/// Custom animated widget helper (avoids naming conflict with Flutter's AnimatedBuilder).
+class _AnimatedWaveWidget extends AnimatedWidget {
+  const _AnimatedWaveWidget({
     required Animation<double> animation,
     required this.builder,
     this.child,
@@ -700,6 +717,7 @@ class _CheckpointNatija extends StatelessWidget {
     super.key,
     required this.tartibScore,
     required this.takamulScore,
+    required this.rabitaScore,
     required this.tasmiScore,
     required this.verses,
     required this.onFinish,
@@ -707,12 +725,13 @@ class _CheckpointNatija extends StatelessWidget {
 
   final int tartibScore;
   final int takamulScore;
+  final int rabitaScore;
   final int tasmiScore;
   final List<EnrichedVerse> verses;
   final VoidCallback onFinish;
 
   int get _globalScore =>
-      (tartibScore * 0.25 + takamulScore * 0.35 + tasmiScore * 0.40)
+      (tartibScore * 0.15 + takamulScore * 0.25 + rabitaScore * 0.25 + tasmiScore * 0.35)
           .round()
           .clamp(0, 100);
 
@@ -753,6 +772,8 @@ class _CheckpointNatija extends StatelessWidget {
           _StepScoreRow('Tartib', 'ترتيب', tartibScore),
           const SizedBox(height: 8),
           _StepScoreRow('Takamul', 'تكامل', takamulScore),
+          const SizedBox(height: 8),
+          _StepScoreRow('Rabita', 'رابطة', rabitaScore),
           const SizedBox(height: 8),
           _StepScoreRow('Tasmi\'', 'تسميع', tasmiScore),
 

@@ -235,9 +235,17 @@ class _SurahSelectionScreenState extends ConsumerState<SurahSelectionScreen> {
           itemBuilder: (context, i) {
             // 114 first (from end of list)
             final surah = map.surahs[map.surahs.length - 1 - i];
+            // Mode Rapide : éligible si ≥80% des versets sont démarrés
+            // et score moyen ≥ 55 (Acquis/Tier 4+)
+            final isQuickEligible = surah.totalVerses > 0 &&
+                surah.versesStarted / surah.totalVerses >= 0.80 &&
+                surah.averageScore >= 55;
             return _AllSurahCard(
               surah: surah,
               onTap: () => _launchWird(surah.surahNumber),
+              onQuickVerify: isQuickEligible
+                  ? () => _launchQuickVerify(surah.surahNumber, surah.nameAr, surah.nameFr)
+                  : null,
             );
           },
         ),
@@ -325,6 +333,34 @@ class _SurahSelectionScreenState extends ConsumerState<SurahSelectionScreen> {
 
       if (!mounted) return;
       context.push('/hifz-v2/wird', extra: session);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Lance le Mode Rapide pour une sourate éligible.
+  Future<void> _launchQuickVerify(
+      int surahNumber, String nameAr, String nameFr) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final service = ref.read(hifzV2ServiceProvider);
+      final content = await service.fetchSurahContent(surahNumber);
+
+      if (!mounted) return;
+      context.push('/hifz-v2/quick-verify', extra: {
+        'surahNumber': surahNumber,
+        'surahNameAr': nameAr,
+        'surahNameFr': nameFr,
+        'allVerses': content.verses,
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -488,10 +524,15 @@ class _SurahSelectionCard extends StatelessWidget {
 
 /// Carte compacte pour la liste "Toutes les sourates".
 class _AllSurahCard extends StatelessWidget {
-  const _AllSurahCard({required this.surah, required this.onTap});
+  const _AllSurahCard({
+    required this.surah,
+    required this.onTap,
+    this.onQuickVerify,
+  });
 
   final SurahMapEntry surah;
   final VoidCallback onTap;
+  final VoidCallback? onQuickVerify;
 
   @override
   Widget build(BuildContext context) {
@@ -576,8 +617,21 @@ class _AllSurahCard extends StatelessWidget {
 
                 const SizedBox(width: 8),
 
-                // Icône
-                if (surah.isCompleted)
+                // Icône Mode Rapide ou chevron
+                if (onQuickVerify != null)
+                  GestureDetector(
+                    onTap: onQuickVerify,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: HifzColors.emeraldMuted,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.bolt,
+                          color: HifzColors.emerald, size: 18),
+                    ),
+                  )
+                else if (surah.isCompleted)
                   const Icon(Icons.check_circle,
                       color: HifzColors.gold, size: 18)
                 else

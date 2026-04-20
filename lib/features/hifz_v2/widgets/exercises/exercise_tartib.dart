@@ -249,19 +249,3 @@ class _ExerciseTartibState extends State<ExerciseTartib> {
     );
   }
 }
-
-/// AnimatedBuilder is just an alias for AnimatedBuilder.
-class AnimatedBuilder extends AnimatedWidget {
-  const AnimatedBuilder({
-    super.key,
-    required super.listenable,
-    required this.builder,
-    this.child,
-  });
-
-  final Widget Function(BuildContext, Widget?) builder;
-  final Widget? child;
-
-  @override
-  Widget build(BuildContext context) => builder(context, child);
-}

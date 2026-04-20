@@ -73,6 +73,7 @@ enum CheckpointStep {
   istima,   // Écoute globale (pas de score)
   tartib,   // Ordonnancement des versets
   takamul,  // Complétion multi-versets (trous)
+  rabita,   // Enchaînements (transitions MCQ) — Phase 3
   tasmi,    // Récitation cumulée
   natija,   // Résultats du checkpoint
 }

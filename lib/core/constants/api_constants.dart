@@ -100,6 +100,7 @@ class ApiConstants {
   static const String studentHifzStepResult = '/student/hifz/v2/steps/result';
   static const String studentHifzCheckpointComplete = '/student/hifz/v2/checkpoint/complete';
   static String studentHifzSurahContent(int n) => '/student/hifz/v2/surah/$n/content';
+  static String studentHifzQuickVerify(int n) => '/student/hifz/v2/surah/$n/quick-verify';
   static const String studentHifzMap = '/student/hifz/v2/map';
   static String studentHifzVerseProgress(int surah, int verse) =>
       '/student/hifz/v2/verse/$surah/$verse/progress';

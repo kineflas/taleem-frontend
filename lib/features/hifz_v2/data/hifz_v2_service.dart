@@ -126,6 +126,7 @@ class HifzV2Service {
     required int verseEnd,
     required int tartibScore,
     required int takamulScore,
+    int? rabitaScore,
     required int tasmiScore,
     required int durationSeconds,
   }) async {
@@ -138,11 +139,38 @@ class HifzV2Service {
         'verse_end': verseEnd,
         'tartib_score': tartibScore,
         'takamul_score': takamulScore,
+        if (rabitaScore != null) 'rabita_score': rabitaScore,
         'tasmi_score': tasmiScore,
         'duration_seconds': durationSeconds,
       },
     );
     return CheckpointCompleteResponse.fromJson(
+        response.data as Map<String, dynamic>);
+  }
+
+  // ── Quick Verify (Phase 3 — Mode Rapide) ─────────────────────────
+
+  /// Vérification rapide d'une sourate complète (Mode Rapide).
+  /// Met à jour le SRS de tous les versets en batch.
+  Future<QuickVerifyResponse> quickVerifySurah({
+    required int surahNumber,
+    required int tartibScore,
+    required int takamulScore,
+    required int tasmiScore,
+    required int durationSeconds,
+    List<Map<String, int>>? verseScores,
+  }) async {
+    final response = await _dio.post(
+      ApiConstants.studentHifzQuickVerify(surahNumber),
+      data: {
+        'tartib_score': tartibScore,
+        'takamul_score': takamulScore,
+        'tasmi_score': tasmiScore,
+        'duration_seconds': durationSeconds,
+        if (verseScores != null) 'verse_scores': verseScores,
+      },
+    );
+    return QuickVerifyResponse.fromJson(
         response.data as Map<String, dynamic>);
   }
 
@@ -547,6 +575,36 @@ class CheckpointCompleteResponse {
         stars: json['stars'] as int,
         xpEarned: json['xp_earned'] as int,
         versesUpdated: json['verses_updated'] as int,
+        scoresByStep: Map<String, int>.from(
+            (json['scores_by_step'] as Map).map(
+                (k, v) => MapEntry(k.toString(), (v as num).toInt()))),
+      );
+}
+
+class QuickVerifyResponse {
+  QuickVerifyResponse({
+    required this.globalScore,
+    required this.stars,
+    required this.xpEarned,
+    required this.versesUpdated,
+    required this.tierUps,
+    required this.scoresByStep,
+  });
+
+  final int globalScore;
+  final int stars;
+  final int xpEarned;
+  final int versesUpdated;
+  final int tierUps;
+  final Map<String, int> scoresByStep;
+
+  factory QuickVerifyResponse.fromJson(Map<String, dynamic> json) =>
+      QuickVerifyResponse(
+        globalScore: json['global_score'] as int,
+        stars: json['stars'] as int,
+        xpEarned: json['xp_earned'] as int,
+        versesUpdated: json['verses_updated'] as int,
+        tierUps: json['tier_ups'] as int? ?? 0,
         scoresByStep: Map<String, int>.from(
             (json['scores_by_step'] as Map).map(
                 (k, v) => MapEntry(k.toString(), (v as num).toInt()))),
