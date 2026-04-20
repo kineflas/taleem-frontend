@@ -14,6 +14,7 @@ import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
 import '../services/audio_orchestrator.dart';
 import '../widgets/exercises/exercise_rabita.dart';
+import '../widgets/exercises/exercise_rabita_asr.dart';
 import '../widgets/exercises/exercise_tartib.dart';
 import '../widgets/exercises/exercise_takamul.dart';
 
@@ -43,6 +44,9 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
   int _takamulScore = 0;
   int _rabitaScore = 0;
   int _tasmiScore = 0;
+
+  // Rabita mode: null = pas encore choisi, 'mcq' ou 'asr'
+  String? _rabitaMode;
 
   // Audio pour Istima'
   List<AudioOrchestrator>? _orchestrators;
@@ -278,14 +282,30 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
             _advanceStep();
           },
         ),
-      CheckpointStep.rabita => ExerciseRabita(
-          key: const ValueKey('rabita'),
-          verses: widget.verses,
-          onComplete: (score) {
-            _rabitaScore = score;
-            _advanceStep();
-          },
-        ),
+      CheckpointStep.rabita => _rabitaMode == null
+          ? _RabitaModePicker(
+              key: const ValueKey('rabita-picker'),
+              onModeSelected: (mode) {
+                setState(() => _rabitaMode = mode);
+              },
+            )
+          : _rabitaMode == 'asr'
+              ? ExerciseRabitaAsr(
+                  key: const ValueKey('rabita-asr'),
+                  verses: widget.verses,
+                  onComplete: (score) {
+                    _rabitaScore = score;
+                    _advanceStep();
+                  },
+                )
+              : ExerciseRabita(
+                  key: const ValueKey('rabita-mcq'),
+                  verses: widget.verses,
+                  onComplete: (score) {
+                    _rabitaScore = score;
+                    _advanceStep();
+                  },
+                ),
       CheckpointStep.tasmi => _StepTasmiGrouped(
           key: const ValueKey('tasmi'),
           verses: widget.verses,
@@ -814,6 +834,155 @@ class _CheckpointNatija extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Rabita Mode Picker — Choix entre MCQ et ASR
+// ═══════════════════════════════════════════════════════════════════
+
+class _RabitaModePicker extends StatelessWidget {
+  const _RabitaModePicker({
+    super.key,
+    required this.onModeSelected,
+  });
+
+  final void Function(String mode) onModeSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'رابطة',
+            style: HifzTypo.verse(size: 28, color: HifzColors.gold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Test des enchaînements entre versets',
+            textAlign: TextAlign.center,
+            style: HifzTypo.body(color: HifzColors.textMedium),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Comment veux-tu être testé ?',
+            textAlign: TextAlign.center,
+            style: HifzTypo.body(color: HifzColors.textDark)
+                .copyWith(fontWeight: FontWeight.w600),
+          ),
+
+          const SizedBox(height: 36),
+
+          // ── Option MCQ ──
+          _ModeCard(
+            icon: Icons.touch_app_rounded,
+            title: 'QCM',
+            titleAr: 'اختيارات',
+            description:
+                'Choisis le bon enchaînement parmi 3 propositions',
+            color: HifzColors.emerald,
+            onTap: () => onModeSelected('mcq'),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Option ASR ──
+          _ModeCard(
+            icon: Icons.mic_rounded,
+            title: 'Récitation',
+            titleAr: 'تسميع',
+            description:
+                'Récite le début du verset suivant à voix haute',
+            color: HifzColors.gold,
+            onTap: () => onModeSelected('asr'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeCard extends StatelessWidget {
+  const _ModeCard({
+    required this.icon,
+    required this.title,
+    required this.titleAr,
+    required this.description,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String titleAr;
+  final String description;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            // Icône
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 28),
+            ),
+            const SizedBox(width: 16),
+            // Texte
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: HifzTypo.body(color: color).copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        titleAr,
+                        textDirection: TextDirection.rtl,
+                        style: HifzTypo.verse(size: 16, color: color),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: HifzTypo.body(color: HifzColors.textMedium)
+                        .copyWith(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: color, size: 24),
+          ],
+        ),
       ),
     );
   }

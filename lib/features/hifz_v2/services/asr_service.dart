@@ -7,6 +7,7 @@
 ///
 /// Utilise le modèle tarteel-ai/whisper-base-ar-quran, fine-tuné pour le Coran.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:record/record.dart';
@@ -335,6 +336,73 @@ class AsrService {
         recSeconds: recSeconds,
         surahNumber: surahNumber,
         verseNumber: verseNumber,
+      );
+    }
+  }
+
+  /// Envoie l'audio d'une sourate complète au serveur ASR pour validation.
+  ///
+  /// Appelle POST /api/validate-surah avec l'audio + les textes de chaque verset.
+  /// Le serveur gère le chunking automatique pour les longues récitations.
+  Future<AsrValidationResult> validateSurahRecording({
+    required String audioPath,
+    required List<String> verseTexts,
+  }) async {
+    try {
+      MultipartFile audioFile;
+      if (kIsWeb && _webRecordingBytes != null) {
+        audioFile = MultipartFile.fromBytes(
+          _webRecordingBytes!,
+          filename: 'recording.webm',
+          contentType: DioMediaType.parse('audio/webm'),
+        );
+      } else {
+        audioFile = await MultipartFile.fromFile(
+          audioPath,
+          filename: 'recording.m4a',
+        );
+      }
+
+      debugPrint('ASR: Envoi sourate vers /api/validate-surah (${verseTexts.length} versets)');
+
+      final formData = FormData.fromMap({
+        'audio': audioFile,
+        'verses_json': jsonEncode(verseTexts),
+        'pass_threshold': 0.7,
+      });
+
+      final response = await _dio.post('/api/validate-surah', data: formData);
+
+      if (response.statusCode == 200) {
+        final result = AsrValidationResult.fromJson(
+            response.data as Map<String, dynamic>);
+        debugPrint('ASR Surah: accuracy=${result.accuracy}, '
+            'correct=${result.correctWords}/${result.wordResults.length}');
+        return result;
+      }
+
+      debugPrint('ASR Surah: Erreur serveur ${response.statusCode}');
+      return AsrValidationResult(
+        success: false,
+        accuracy: 0,
+        transcription: '',
+        wordResults: [],
+        correctWords: 0,
+        wrongWords: 0,
+        missingWords: 0,
+        error: 'Erreur serveur ${response.statusCode}',
+      );
+    } catch (e) {
+      debugPrint('ASR Surah: Erreur validation: $e');
+      return AsrValidationResult(
+        success: false,
+        accuracy: 0,
+        transcription: '',
+        wordResults: [],
+        correctWords: 0,
+        wrongWords: 0,
+        missingWords: 0,
+        error: e.toString(),
       );
     }
   }

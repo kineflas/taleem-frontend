@@ -34,6 +34,7 @@ import '../../features/hifz/screens/surah_heatmap_screen.dart';
 import '../../features/hifz_v2/screens/hifz_map_screen.dart';
 import '../../features/hifz_v2/screens/surah_selection_screen.dart';
 import '../../features/hifz_v2/screens/quick_verify_screen.dart';
+import '../../features/hifz_v2/screens/surah_asr_screen.dart';
 import '../../features/hifz_v2/screens/wird_session_screen.dart';
 import '../../features/hifz_v2/screens/wird_verse_flow_screen.dart';
 import '../../features/hifz_v2/models/wird_models.dart';
@@ -321,6 +322,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (ctx, state) {
           final extra = state.extra as Map<String, dynamic>;
           return QuickVerifyScreen(
+            surahNumber: extra['surahNumber'] as int,
+            surahNameAr: extra['surahNameAr'] as String,
+            surahNameFr: extra['surahNameFr'] as String,
+            allVerses: extra['allVerses'] as List<EnrichedVerse>,
+          );
+        },
+      ),
+
+      // Hifz V2 — Surah ASR validation (récitation complète)
+      GoRoute(
+        path: '/hifz-v2/surah-asr',
+        builder: (ctx, state) {
+          final extra = state.extra as Map<String, dynamic>;
+          return SurahAsrScreen(
             surahNumber: extra['surahNumber'] as int,
             surahNameAr: extra['surahNameAr'] as String,
             surahNameFr: extra['surahNameFr'] as String,

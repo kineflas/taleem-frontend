@@ -246,6 +246,9 @@ class _SurahSelectionScreenState extends ConsumerState<SurahSelectionScreen> {
               onQuickVerify: isQuickEligible
                   ? () => _launchQuickVerify(surah.surahNumber, surah.nameAr, surah.nameFr)
                   : null,
+              // ASR disponible pour TOUTES les sourates — permet de valider
+              // une sourate déjà connue sans avoir à démarrer 80% des versets
+              onAsrVerify: () => _launchAsrVerify(surah.surahNumber, surah.nameAr, surah.nameFr),
             );
           },
         ),
@@ -356,6 +359,34 @@ class _SurahSelectionScreenState extends ConsumerState<SurahSelectionScreen> {
 
       if (!mounted) return;
       context.push('/hifz-v2/quick-verify', extra: {
+        'surahNumber': surahNumber,
+        'surahNameAr': nameAr,
+        'surahNameFr': nameFr,
+        'allVerses': content.verses,
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Lance la validation vocale ASR pour une sourate complète.
+  Future<void> _launchAsrVerify(
+      int surahNumber, String nameAr, String nameFr) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final service = ref.read(hifzV2ServiceProvider);
+      final content = await service.fetchSurahContent(surahNumber);
+
+      if (!mounted) return;
+      context.push('/hifz-v2/surah-asr', extra: {
         'surahNumber': surahNumber,
         'surahNameAr': nameAr,
         'surahNameFr': nameFr,
@@ -528,11 +559,13 @@ class _AllSurahCard extends StatelessWidget {
     required this.surah,
     required this.onTap,
     this.onQuickVerify,
+    this.onAsrVerify,
   });
 
   final SurahMapEntry surah;
   final VoidCallback onTap;
   final VoidCallback? onQuickVerify;
+  final VoidCallback? onAsrVerify;
 
   @override
   Widget build(BuildContext context) {
@@ -617,21 +650,37 @@ class _AllSurahCard extends StatelessWidget {
 
                 const SizedBox(width: 8),
 
-                // Icône Mode Rapide ou chevron
-                if (onQuickVerify != null)
-                  GestureDetector(
-                    onTap: onQuickVerify,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: HifzColors.emeraldMuted,
-                        borderRadius: BorderRadius.circular(8),
+                // Icônes Mode Rapide + ASR ou chevron
+                if (onQuickVerify != null || onAsrVerify != null) ...[
+                  if (onAsrVerify != null)
+                    GestureDetector(
+                      onTap: onAsrVerify,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: HifzColors.goldMuted,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.mic_rounded,
+                            color: HifzColors.gold, size: 18),
                       ),
-                      child: const Icon(Icons.bolt,
-                          color: HifzColors.emerald, size: 18),
                     ),
-                  )
-                else if (surah.isCompleted)
+                  if (onQuickVerify != null) ...[
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: onQuickVerify,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: HifzColors.emeraldMuted,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(Icons.bolt,
+                            color: HifzColors.emerald, size: 18),
+                      ),
+                    ),
+                  ],
+                ] else if (surah.isCompleted)
                   const Icon(Icons.check_circle,
                       color: HifzColors.gold, size: 18)
                 else
