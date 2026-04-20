@@ -377,7 +377,7 @@ class _StepIstimaState extends State<_StepIstima> {
       setState(() => _currentIndex = i);
 
       try {
-        await widget.orchestrators[i].playFull();
+        await widget.orchestrators[i].playOnce();
         // Small pause between verses
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (_) {
