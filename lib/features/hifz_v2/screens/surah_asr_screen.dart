@@ -10,12 +10,15 @@
 ///   3. Validation — envoi au serveur, loading
 ///   4. Résultats — score global + texte coloré mot par mot
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
 import '../services/asr_service.dart';
+import '../widgets/asr_replay_player.dart';
 
 enum _AsrPhase { ready, recording, validating, results }
 
@@ -46,8 +49,13 @@ class _SurahAsrScreenState extends ConsumerState<SurahAsrScreen> {
   Timer? _recTimer;
   bool _showText = false;
 
+  // Audio conservé pour le replay
+  String? _savedAudioPath;
+  Uint8List? _savedAudioBytes;
+
   // Results
   AsrValidationResult? _result;
+  bool _showReplay = false;
 
   @override
   void dispose() {
@@ -84,6 +92,10 @@ class _SurahAsrScreenState extends ConsumerState<SurahAsrScreen> {
       return;
     }
 
+    // Conserver l'audio pour le replay (ne pas appeler cleanup)
+    _savedAudioPath = audioPath;
+    _savedAudioBytes = _asr.webRecordingBytes;
+
     // Textes attendus par verset
     final verseTexts = widget.allVerses.map((v) => v.textAr).toList();
 
@@ -92,22 +104,30 @@ class _SurahAsrScreenState extends ConsumerState<SurahAsrScreen> {
       verseTexts: verseTexts,
     );
 
-    await _asr.cleanup();
-
     if (!mounted) return;
 
     setState(() {
       _result = result;
       _phase = _AsrPhase.results;
+      _showReplay = false;
     });
   }
 
   void _retry() {
+    _asr.cleanup();
     setState(() {
       _phase = _AsrPhase.ready;
       _result = null;
       _recSeconds = 0;
+      _showReplay = false;
+      _savedAudioPath = null;
+      _savedAudioBytes = null;
     });
+  }
+
+  /// Vérifie qu'au moins quelques mots ont des timestamps pour le replay.
+  bool _hasTimestamps(AsrValidationResult r) {
+    return r.wordResults.any((w) => w.startTime != null && w.endTime != null);
   }
 
   String _formatDuration(int seconds) {
@@ -396,32 +416,56 @@ class _SurahAsrScreenState extends ConsumerState<SurahAsrScreen> {
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
 
-          // Texte coloré mot par mot
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: HifzColors.ivoryWarm,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: SingleChildScrollView(
-                child: Directionality(
-                  textDirection: TextDirection.rtl,
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 10,
-                    alignment: WrapAlignment.start,
-                    children: r.wordResults
-                        .where((w) => w.status != AsrWordStatus.extra)
-                        .map((w) => _ColoredWord(w))
-                        .toList(),
-                  ),
+          // Toggle Replay / Texte statique
+          if (_savedAudioPath != null && _hasTimestamps(r))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => _showReplay = !_showReplay),
+                style: HifzDecor.secondaryButton.copyWith(
+                  minimumSize: WidgetStatePropertyAll(Size.fromHeight(40)),
                 ),
+                icon: Icon(
+                  _showReplay ? Icons.text_fields_rounded : Icons.play_circle_rounded,
+                  size: 18,
+                ),
+                label: Text(_showReplay ? 'Vue statique' : 'Réécouter avec suivi'),
               ),
             ),
+
+          // Texte coloré mot par mot — statique ou replay synchronisé
+          Expanded(
+            child: _showReplay && _savedAudioPath != null
+                ? AsrReplayPlayer(
+                    wordResults: r.wordResults,
+                    audioPath: _savedAudioPath!,
+                    audioBytes: _savedAudioBytes,
+                    fontSize: 18,
+                  )
+                : Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: HifzColors.ivoryWarm,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 10,
+                          alignment: WrapAlignment.start,
+                          children: r.wordResults
+                              .where((w) => w.status != AsrWordStatus.extra)
+                              .map((w) => _ColoredWord(w))
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  ),
           ),
 
           const SizedBox(height: 8),

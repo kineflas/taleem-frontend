@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -6,6 +8,7 @@ import '../models/hifz_v2_theme.dart';
 import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
 import '../services/asr_service.dart';
+import 'asr_replay_player.dart';
 
 /// Étape 4 — TASMI' (تسميع) : Récitation intégrale.
 ///
@@ -40,17 +43,14 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
   // Résultat ASR
   AsrValidationResult? _asrResult;
 
-  // Replay audio
-  final AudioPlayer _replayPlayer = AudioPlayer();
-  bool _isReplaying = false;
-  int _activeWordIdx = -1;
-  Timer? _replayTimer;
+  // Audio conservé pour le replay
+  String? _savedAudioPath;
+  Uint8List? _savedAudioBytes;
+  bool _showReplayPlayer = false;
 
   @override
   void dispose() {
     _recTimer?.cancel();
-    _replayTimer?.cancel();
-    _replayPlayer.dispose();
     super.dispose();
   }
 
@@ -98,6 +98,10 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
       return;
     }
 
+    // Conserver l'audio pour le replay (avant cleanup)
+    _savedAudioPath = audioPath;
+    _savedAudioBytes = asr.webRecordingBytes;
+
     _asrResult = await asr.validateRecording(
       audioPath: audioPath,
       expectedText: widget.verse.textAr,
@@ -108,15 +112,19 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
       withTimestamps: true,
     );
 
-    await asr.cleanup();
+    // Ne pas appeler cleanup — on garde l'audio pour le replay
     if (mounted) setState(() => _phase = _TasmiPhase.replay);
   }
 
   void _retry() {
+    ref.read(asrServiceProvider).cleanup();
     setState(() {
       _phase = _TasmiPhase.prompt;
       _asrResult = null;
       _recSeconds = 0;
+      _showReplayPlayer = false;
+      _savedAudioPath = null;
+      _savedAudioBytes = null;
     });
   }
 
@@ -267,6 +275,11 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
     );
   }
 
+  /// Vérifie qu'au moins quelques mots ont des timestamps.
+  bool _hasTimestamps(AsrValidationResult r) {
+    return r.wordResults.any((w) => w.startTime != null && w.endTime != null);
+  }
+
   // ── Replay avec résultat mot par mot ──
   Widget _buildReplay() {
     final result = _asrResult;
@@ -274,6 +287,7 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
 
     final accuracy = result.accuracy;
     final isSimulated = result.transcription == '(simulation)';
+    final canReplay = _savedAudioPath != null && _hasTimestamps(result);
 
     return Column(
       key: const ValueKey('replay'),
@@ -302,56 +316,79 @@ class _StepTasmiState extends ConsumerState<StepTasmi> {
           ),
         ],
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
-        // Verset coloré
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          decoration: HifzDecor.card,
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            textDirection: TextDirection.rtl,
-            spacing: 6,
-            runSpacing: 16,
-            children: result.wordResults.asMap().entries.map((entry) {
-              final idx = entry.key;
-              final wr = entry.value;
-              final isActive = idx == _activeWordIdx;
-
-              Color color;
-              switch (wr.status) {
-                case AsrWordStatus.correct:
-                  color = HifzColors.correct;
-                case AsrWordStatus.close:
-                  color = HifzColors.close;
-                case AsrWordStatus.wrong:
-                  color = HifzColors.wrong;
-                case AsrWordStatus.missing:
-                  color = HifzColors.missing;
-                case AsrWordStatus.extra:
-                  color = HifzColors.textLight;
-              }
-
-              return Text(
-                wr.word,
-                style: HifzTypo.verse(
-                  size: isActive ? 28 : 24,
-                  color: isActive ? HifzColors.karaokeActive : color,
-                ),
-                textDirection: TextDirection.rtl,
-              );
-            }).toList(),
+        // Toggle replay synchronisé
+        if (canReplay)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: OutlinedButton.icon(
+              onPressed: () =>
+                  setState(() => _showReplayPlayer = !_showReplayPlayer),
+              style: HifzDecor.secondaryButton.copyWith(
+                minimumSize:
+                    const WidgetStatePropertyAll(Size.fromHeight(40)),
+              ),
+              icon: Icon(
+                _showReplayPlayer
+                    ? Icons.text_fields_rounded
+                    : Icons.play_circle_rounded,
+                size: 18,
+              ),
+              label: Text(
+                  _showReplayPlayer ? 'Vue statique' : 'Réécouter avec suivi'),
+            ),
           ),
-        ),
 
-        const SizedBox(height: 20),
+        // Verset coloré — statique ou replay synchronisé
+        if (_showReplayPlayer && canReplay)
+          SizedBox(
+            height: 280,
+            child: AsrReplayPlayer(
+              wordResults: result.wordResults,
+              audioPath: _savedAudioPath!,
+              audioBytes: _savedAudioBytes,
+              fontSize: 22,
+            ),
+          )
+        else
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            decoration: HifzDecor.card,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              textDirection: TextDirection.rtl,
+              spacing: 6,
+              runSpacing: 16,
+              children: result.wordResults
+                  .where((w) => w.status != AsrWordStatus.extra)
+                  .map((wr) {
+                final Color color = switch (wr.status) {
+                  AsrWordStatus.correct => HifzColors.correct,
+                  AsrWordStatus.close => HifzColors.close,
+                  AsrWordStatus.wrong => HifzColors.wrong,
+                  AsrWordStatus.missing => HifzColors.missing,
+                  AsrWordStatus.extra => HifzColors.textLight,
+                };
+
+                return Text(
+                  wr.word,
+                  style: HifzTypo.verse(size: 24, color: color),
+                  textDirection: TextDirection.rtl,
+                );
+              }).toList(),
+            ),
+          ),
+
+        const SizedBox(height: 16),
 
         // Légende
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _LegendDot(HifzColors.correct, 'Correct'),
+            _LegendDot(HifzColors.close, 'Proche'),
             _LegendDot(HifzColors.wrong, 'Erreur'),
             _LegendDot(HifzColors.missing, 'Oublié'),
           ],

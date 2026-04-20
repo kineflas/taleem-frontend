@@ -202,6 +202,9 @@ class AsrService {
 
   bool get isRecording => _isRecording;
 
+  /// Bytes audio web (pour le replay après validation).
+  Uint8List? get webRecordingBytes => _webRecordingBytes;
+
   /// Vérifie que le serveur ASR est accessible.
   Future<bool> isAvailable() async {
     try {
