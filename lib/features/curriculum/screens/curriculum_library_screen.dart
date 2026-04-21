@@ -48,14 +48,14 @@ class CurriculumLibraryScreen extends ConsumerWidget {
           for (final p in visiblePrograms) {
             grouped.putIfAbsent(p.category, () => []).add(p);
           }
-          // Order categories
-          final categoryOrder = [
+          // Order categories — toujours afficher les 3 catégories même si
+          // elles n'ont plus de programmes API visibles (les _FeatureCard
+          // comme Médine V2, Odyssée ou Hifz Master doivent rester visibles).
+          final orderedCategories = [
             ProgramCategory.apprendreALire,
             ProgramCategory.comprendreArabe,
             ProgramCategory.coran,
           ];
-          final orderedCategories =
-              categoryOrder.where((c) => grouped.containsKey(c)).toList();
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -65,7 +65,7 @@ class CurriculumLibraryScreen extends ConsumerWidget {
                 for (final cat in orderedCategories) ...[
                   _CategoryHeader(category: cat),
                   const SizedBox(height: 10),
-                  ...grouped[cat]!.map((program) {
+                  ...(grouped[cat] ?? []).map((program) {
                     final isEnrolled = enrolledIds.contains(program.id);
                     final enrollment = isEnrolled
                         ? enrollments.firstWhere(
