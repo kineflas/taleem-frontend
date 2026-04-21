@@ -93,8 +93,11 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
         _isInFlow = _autoAdvance;
       });
     } else {
-      // Bloc terminé — déclencher un checkpoint si des versets JADID en attente
-      if (_currentBloc == WirdBloc.jadid && _checkpointVerses.isNotEmpty) {
+      // Bloc terminé — déclencher un checkpoint final si ≥ 2 versets JADID
+      // en attente (minimum 2 pour que les exercices d'ordonnancement/liaison
+      // aient du sens). Avec 1 seul verset restant, on passe directement
+      // au bloc suivant.
+      if (_currentBloc == WirdBloc.jadid && _checkpointVerses.length >= 2) {
         setState(() {
           _inCheckpoint = true;
           _isInFlow = false;
