@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/network/api_client.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/player_models.dart';
 import '../services/quran_audio_service.dart';
@@ -11,6 +13,26 @@ final quranAudioServiceProvider =
     ChangeNotifierProvider<QuranAudioService>((ref) {
   final service = QuranAudioService();
   service.init();
+
+  // ── Listening log callback (passive SRS tracking) ──
+  final dio = ref.read(dioProvider);
+  service.onVerseListened = (surah, verse, reciterFolder, listenCount) {
+    dio
+        .post(
+          '/student/hifz/v2/listening-log',
+          data: {
+            'surah_number': surah,
+            'verse_number': verse,
+            'reciter_folder': reciterFolder,
+            'listen_count': listenCount,
+            'completed': true,
+          },
+        )
+        .then((_) => debugPrint('[ListeningLog] Logged $surah:$verse'))
+        .catchError(
+            (e) => debugPrint('[ListeningLog] Error: $e'));
+  };
+
   ref.onDispose(() => service.dispose());
   return service;
 });

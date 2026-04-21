@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../quran_player/widgets/mini_player_bar.dart';
 
 /// Shell avec bottom nav 4 onglets : Accueil / Coran / Parcours / Profil.
+/// Intègre un mini-player persistant au-dessus de la bottom nav.
 class StudentShellScreen extends StatelessWidget {
   final Widget child;
 
@@ -26,39 +28,48 @@ class StudentShellScreen extends StatelessWidget {
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: index,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        onTap: (i) {
-          switch (i) {
-            case 0: context.go('/student');
-            case 1: context.go('/student/quran');
-            case 2: context.go('/student/curriculum');
-            case 3: context.go('/student/profile');
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Accueil',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.auto_stories_outlined),
-            activeIcon: Icon(Icons.auto_stories),
-            label: 'Coran',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.menu_book_outlined),
-            activeIcon: Icon(Icons.menu_book),
-            label: 'Parcours',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profil',
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Mini-player persistant (visible si audio actif)
+          const MiniPlayerBar(),
+
+          // Bottom navigation bar
+          BottomNavigationBar(
+            currentIndex: index,
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: Colors.grey,
+            type: BottomNavigationBarType.fixed,
+            onTap: (i) {
+              switch (i) {
+                case 0: context.go('/student');
+                case 1: context.go('/student/quran');
+                case 2: context.go('/student/curriculum');
+                case 3: context.go('/student/profile');
+              }
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined),
+                activeIcon: Icon(Icons.home),
+                label: 'Accueil',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.auto_stories_outlined),
+                activeIcon: Icon(Icons.auto_stories),
+                label: 'Coran',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.menu_book_outlined),
+                activeIcon: Icon(Icons.menu_book),
+                label: 'Parcours',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                activeIcon: Icon(Icons.person),
+                label: 'Profil',
+              ),
+            ],
           ),
         ],
       ),

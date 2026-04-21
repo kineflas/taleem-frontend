@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../hifz_v2/models/hifz_v2_theme.dart';
+import '../../hifz_v2/data/hifz_v2_service.dart' show EnrichedSurahResponse;
+import '../../hifz_v2/providers/hifz_v2_provider.dart';
 
 import '../../quran_player/providers/quran_player_provider.dart';
 import '../../quran_player/services/quran_audio_service.dart';
 import '../../quran_player/models/player_models.dart';
 import '../../quran_player/widgets/verse_display.dart';
+import '../../quran_player/widgets/karaoke_verse_display.dart';
 import '../../quran_player/widgets/player_controls.dart';
 import '../../quran_player/widgets/reciter_selector.dart';
 import '../../../core/constants/app_colors.dart';
@@ -193,6 +196,7 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
       surah: surah.number,
       startVerse: 1,
       endVerse: surah.totalVerses,
+      surahName: '${surah.nameAr} — ${surah.nameFr}',
     );
 
     setState(() {
@@ -217,6 +221,11 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
         : null;
     final translationAsync = _showTranslation && _selectedSurah != null
         ? ref.watch(surahTranslationProvider(_selectedSurah!))
+        : null;
+
+    // Tenter de charger les données enrichies (karaoke timings)
+    final enrichedAsync = _selectedSurah != null
+        ? ref.watch(surahContentProvider(_selectedSurah!))
         : null;
 
     return Scaffold(
@@ -248,19 +257,12 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
         children: [
           // Versets
           Expanded(
-            child: surahTextAsync?.when(
-                  data: (verses) => VerseDisplay(
-                    verses: verses,
-                    translations: translationAsync?.valueOrNull,
-                    showTranslation: _showTranslation,
-                    currentVerse: audioService.currentEntry?.verse ?? 1,
-                    startVerse: _startVerse,
-                    scrollController: _scrollController,
-                  ),
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('$e')),
-                ) ??
-                const Center(child: Text('Sélectionnez une sourate')),
+            child: _buildVerseContent(
+              audioService: audioService,
+              surahTextAsync: surahTextAsync,
+              translationAsync: translationAsync,
+              enrichedAsync: enrichedAsync,
+            ),
           ),
 
           // Contrôles
@@ -268,6 +270,47 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildVerseContent({
+    required QuranAudioService audioService,
+    required AsyncValue<Map<int, String>>? surahTextAsync,
+    required AsyncValue<Map<int, String>>? translationAsync,
+    required AsyncValue<EnrichedSurahResponse>? enrichedAsync,
+  }) {
+    if (_selectedSurah == null) {
+      return const Center(child: Text('Sélectionnez une sourate'));
+    }
+
+    // Si données enrichies disponibles avec timings → mode karaoke
+    final enrichedVerses = enrichedAsync?.valueOrNull?.verses;
+    if (enrichedVerses != null && enrichedVerses.isNotEmpty) {
+      final hasTimings = enrichedVerses.any((v) => v.audioTimings != null);
+      if (hasTimings) {
+        return KaraokeVerseDisplay(
+          verses: enrichedVerses,
+          audioService: audioService,
+          startVerse: _startVerse,
+          showTranslation: _showTranslation,
+          translations: translationAsync?.valueOrNull,
+        );
+      }
+    }
+
+    // Fallback : affichage standard
+    return surahTextAsync?.when(
+          data: (verses) => VerseDisplay(
+            verses: verses,
+            translations: translationAsync?.valueOrNull,
+            showTranslation: _showTranslation,
+            currentVerse: audioService.currentEntry?.verse ?? 1,
+            startVerse: _startVerse,
+            scrollController: _scrollController,
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('$e')),
+        ) ??
+        const Center(child: Text('Sélectionnez une sourate'));
   }
 }
 

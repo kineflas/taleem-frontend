@@ -107,6 +107,7 @@ class ApiConstants {
 
   // Quran Player — Révision audio
   static const String studentHifzRevisionPlaylist = '/student/hifz/v2/revision/audio-playlist';
+  static const String studentHifzListeningLog = '/student/hifz/v2/listening-log';
 
   // Medine V2
   static const String lessonsV2 = '/api/v2/lessons';

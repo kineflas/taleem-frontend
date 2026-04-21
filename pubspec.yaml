@@ -38,6 +38,7 @@ dependencies:
   # Audio
   audioplayers: ^6.1.0
   record: ^5.1.2
+  wakelock_plus: ^1.2.8
 
   # Utilities
   intl: ^0.20.2

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../hifz_v2/models/hifz_v2_theme.dart';
+import '../../hifz_v2/providers/hifz_v2_provider.dart';
 import '../models/player_models.dart';
 import '../providers/quran_player_provider.dart';
 import '../services/quran_audio_service.dart';
 import '../widgets/verse_display.dart';
+import '../widgets/karaoke_verse_display.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/reciter_selector.dart';
 
@@ -271,6 +273,26 @@ class _QuranPlayerScreenState extends ConsumerState<QuranPlayerScreen>
         ? ref.watch(surahTranslationProvider(_selectedSurah!))
         : null;
 
+    // Tenter de charger les données enrichies (avec timings karaoke)
+    // Disponible pour les sourates du Juz Amma (78-114) via le backend
+    final enrichedAsync = ref.watch(surahContentProvider(_selectedSurah!));
+
+    // Si les données enrichies sont disponibles → mode karaoke
+    final enrichedVerses = enrichedAsync.valueOrNull?.verses;
+    if (enrichedVerses != null && enrichedVerses.isNotEmpty) {
+      final hasTimings = enrichedVerses.any((v) => v.audioTimings != null);
+      if (hasTimings) {
+        return KaraokeVerseDisplay(
+          verses: enrichedVerses,
+          audioService: audioService,
+          startVerse: _startVerse,
+          showTranslation: _showTranslation,
+          translations: translations?.valueOrNull,
+        );
+      }
+    }
+
+    // Fallback : affichage standard sans karaoke
     return surahText.when(
       data: (verses) {
         return ListenableBuilder(
@@ -374,13 +396,28 @@ class _QuranPlayerScreenState extends ConsumerState<QuranPlayerScreen>
             Icon(Icons.cloud_off_rounded,
                 size: 48, color: HifzColors.textLight),
             const SizedBox(height: 16),
-            Text('Fonctionnalité bientôt disponible',
+            Text('Erreur de chargement',
                 style: HifzTypo.sectionTitle(), textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(
-              'La révision audio sera disponible une fois que vous aurez commencé à mémoriser des versets.',
+              'Impossible de récupérer la playlist de révision. Vérifiez votre connexion et réessayez.',
               style: HifzTypo.body(),
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$error',
+              style: HifzTypo.body(color: HifzColors.textLight),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              style: HifzDecor.primaryButton,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Réessayer'),
+              onPressed: () => ref.invalidate(revisionPlaylistProvider),
             ),
           ],
         ),

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/player_models.dart';
 
 /// Service de lecture audio séquentielle pour le Coran.
@@ -32,6 +34,16 @@ class QuranAudioService extends ChangeNotifier {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
+  // ── Metadata ──
+  String? _currentSurahName;
+  int? _currentSurahNumber;
+  int _versesListenedThisSession = 0;
+
+  /// Callback déclenché quand un verset est complètement écouté.
+  /// (surah, verse, reciterFolder, listenCount).
+  void Function(int surah, int verse, String reciterFolder, int listenCount)?
+      onVerseListened;
+
   // ── Listeners ──
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration>? _durationSub;
@@ -49,6 +61,9 @@ class QuranAudioService extends ChangeNotifier {
   Duration get position => _position;
   Duration get duration => _duration;
   bool get hasPlaylist => _playlist.isNotEmpty;
+  String? get currentSurahName => _currentSurahName;
+  int? get currentSurahNumber => _currentSurahNumber;
+  int get versesListenedThisSession => _versesListenedThisSession;
 
   PlaylistEntry? get currentEntry =>
       _playlist.isNotEmpty && _currentIndex < _playlist.length
@@ -110,6 +125,7 @@ class QuranAudioService extends ChangeNotifier {
     required int startVerse,
     required int endVerse,
     int repeatEach = 1,
+    String? surahName,
   }) {
     _playlist = [];
     for (int v = startVerse; v <= endVerse; v++) {
@@ -121,6 +137,10 @@ class QuranAudioService extends ChangeNotifier {
     }
     _currentIndex = 0;
     _currentRepeat = 0;
+    _currentSurahNumber = surah;
+    _currentSurahName = surahName;
+    _versesListenedThisSession = 0;
+    _saveLastPlayed(surah, startVerse, surahName);
     notifyListeners();
   }
 
@@ -136,6 +156,9 @@ class QuranAudioService extends ChangeNotifier {
         .toList();
     _currentIndex = 0;
     _currentRepeat = 0;
+    _currentSurahName = 'Révision SRS';
+    _currentSurahNumber = null;
+    _versesListenedThisSession = 0;
     notifyListeners();
   }
 
@@ -219,6 +242,17 @@ class QuranAudioService extends ChangeNotifier {
     _isPlaying = false;
     _isPaused = false;
     _position = Duration.zero;
+    _playlist = [];
+    _currentIndex = 0;
+    _currentRepeat = 0;
+    _currentSurahName = null;
+    _currentSurahNumber = null;
+
+    // Réautoriser la mise en veille
+    try {
+      await WakelockPlus.disable();
+    } catch (_) {}
+
     notifyListeners();
   }
 
@@ -235,6 +269,11 @@ class QuranAudioService extends ChangeNotifier {
     await _player.setPlaybackRate(_speed);
     await _player.play(UrlSource(url));
 
+    // Empêcher la mise en veille pendant la lecture
+    try {
+      await WakelockPlus.enable();
+    } catch (_) {}
+
     _isPlaying = true;
     _isPaused = false;
     _position = Duration.zero;
@@ -248,17 +287,70 @@ class QuranAudioService extends ChangeNotifier {
       // Encore des répétitions pour ce verset
       _playCurrentVerse();
     } else {
+      // Verset terminé — notifier le callback de tracking
+      final entry = currentEntry;
+      if (entry != null) {
+        _versesListenedThisSession++;
+        onVerseListened?.call(
+          entry.surah,
+          entry.verse,
+          _reciter.folder,
+          effectiveRepeatCount,
+        );
+      }
+
       // Passer au verset suivant
       _currentRepeat = 0;
       if (_currentIndex < _playlist.length - 1) {
         _currentIndex++;
+
+        // Mettre à jour le nom de sourate si la sourate change
+        final nextEntry = currentEntry;
+        if (nextEntry != null && nextEntry.surah != entry?.surah) {
+          _currentSurahNumber = nextEntry.surah;
+          // Le nom sera mis à jour par le provider quand les données arrivent
+        }
+
         _playCurrentVerse();
       } else {
         // Fin de la playlist
         _isPlaying = false;
         _isPaused = false;
+        try { WakelockPlus.disable(); } catch (_) {}
         notifyListeners();
       }
+    }
+  }
+
+  // ── Persistance dernière écoute ──
+
+  static const _keyLastSurah = 'quran_last_surah';
+  static const _keyLastVerse = 'quran_last_verse';
+  static const _keyLastSurahName = 'quran_last_surah_name';
+
+  Future<void> _saveLastPlayed(int surah, int verse, String? name) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_keyLastSurah, surah);
+      await prefs.setInt(_keyLastVerse, verse);
+      if (name != null) await prefs.setString(_keyLastSurahName, name);
+    } catch (e) {
+      debugPrint('[QuranAudio] Save last played error: $e');
+    }
+  }
+
+  /// Récupère la dernière sourate écoutée.
+  static Future<({int? surah, int? verse, String? name})>
+      getLastPlayed() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return (
+        surah: prefs.getInt(_keyLastSurah),
+        verse: prefs.getInt(_keyLastVerse),
+        name: prefs.getString(_keyLastSurahName),
+      );
+    } catch (_) {
+      return (surah: null, verse: null, name: null);
     }
   }
 
