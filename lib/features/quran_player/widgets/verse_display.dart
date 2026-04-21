@@ -45,7 +45,7 @@ class VerseDisplay extends StatelessWidget {
         return _VerseCard(
           verseNumber: verseNum,
           text: text,
-          translation: showTranslation ? translations?[verseNum] : null,
+          translation: showTranslation ? (translations?[verseNum]) : null,
           isActive: isActive,
           isPast: isPast,
         );
