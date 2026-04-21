@@ -16,7 +16,10 @@ import '../models/player_models.dart';
 class QuranAudioService extends ChangeNotifier {
   QuranAudioService();
 
-  final AudioPlayer _player = AudioPlayer();
+  // Deux players pour le gapless : pendant que _player joue,
+  // _nextPlayer pré-charge le verset suivant.
+  AudioPlayer _player = AudioPlayer();
+  AudioPlayer _nextPlayer = AudioPlayer();
 
   // ── Configuration ──
   ReciterChoice _reciter = ReciterChoice.husary;
@@ -33,6 +36,7 @@ class QuranAudioService extends ChangeNotifier {
   bool _isPaused = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  bool _nextPreloaded = false; // true si _nextPlayer est prêt
 
   // ── Metadata ──
   String? _currentSurahName;
@@ -84,6 +88,15 @@ class QuranAudioService extends ChangeNotifier {
   // ── Initialisation ──
 
   void init() {
+    _bindPlayerListeners();
+  }
+
+  /// Attache les listeners de position/durée/complete au player actif.
+  void _bindPlayerListeners() {
+    _positionSub?.cancel();
+    _durationSub?.cancel();
+    _completeSub?.cancel();
+
     _positionSub = _player.onPositionChanged.listen((pos) {
       _position = pos;
       notifyListeners();
@@ -101,6 +114,7 @@ class QuranAudioService extends ChangeNotifier {
 
   void setReciter(ReciterChoice r) {
     _reciter = r;
+    _nextPreloaded = false; // URLs changent avec le récitateur
     notifyListeners();
   }
 
@@ -108,6 +122,10 @@ class QuranAudioService extends ChangeNotifier {
     _speed = s.clamp(0.5, 2.0);
     if (_isPlaying) {
       _player.setPlaybackRate(_speed);
+    }
+    // Mettre à jour la vitesse du player pré-chargé aussi
+    if (_nextPreloaded) {
+      _nextPlayer.setPlaybackRate(_speed);
     }
     notifyListeners();
   }
@@ -239,6 +257,8 @@ class QuranAudioService extends ChangeNotifier {
 
   Future<void> stop() async {
     await _player.stop();
+    await _nextPlayer.stop();
+    _nextPreloaded = false;
     _isPlaying = false;
     _isPaused = false;
     _position = Duration.zero;
@@ -265,6 +285,8 @@ class QuranAudioService extends ChangeNotifier {
     final url = _reciter.audioUrl(entry.surah, entry.verse);
     debugPrint('[QuranAudio] Playing $url (rep ${_currentRepeat + 1}/${effectiveRepeatCount})');
 
+    _nextPreloaded = false;
+
     await _player.stop();
     await _player.setPlaybackRate(_speed);
     await _player.play(UrlSource(url));
@@ -278,6 +300,54 @@ class QuranAudioService extends ChangeNotifier {
     _isPaused = false;
     _position = Duration.zero;
     notifyListeners();
+
+    // Pré-charger le verset suivant en arrière-plan
+    _preloadNext();
+  }
+
+  /// Pré-charge le verset suivant dans _nextPlayer pour un enchaînement
+  /// quasi-instantané (gapless). Si c'est une répétition du même verset,
+  /// on pré-charge la même URL.
+  Future<void> _preloadNext() async {
+    String? nextUrl;
+
+    if (_currentRepeat + 1 < effectiveRepeatCount) {
+      // Prochaine action = répétition du même verset
+      final entry = currentEntry;
+      if (entry != null) {
+        nextUrl = _reciter.audioUrl(entry.surah, entry.verse);
+      }
+    } else if (_currentIndex + 1 < _playlist.length) {
+      // Prochaine action = verset suivant
+      final next = _playlist[_currentIndex + 1];
+      nextUrl = _reciter.audioUrl(next.surah, next.verse);
+    }
+
+    if (nextUrl == null) return;
+
+    try {
+      await _nextPlayer.stop();
+      await _nextPlayer.setPlaybackRate(_speed);
+      // setSource charge le fichier sans le jouer
+      await _nextPlayer.setSource(UrlSource(nextUrl));
+      _nextPreloaded = true;
+      debugPrint('[QuranAudio] Preloaded: $nextUrl');
+    } catch (e) {
+      debugPrint('[QuranAudio] Preload failed: $e');
+      _nextPreloaded = false;
+    }
+  }
+
+  /// Swapper les deux players : _nextPlayer devient le player actif,
+  /// l'ancien player est recyclé pour le prochain preload.
+  void _swapPlayers() {
+    final old = _player;
+    _player = _nextPlayer;
+    _nextPlayer = old;
+    _nextPreloaded = false;
+
+    // Rebrancher les listeners sur le nouveau player actif
+    _bindPlayerListeners();
   }
 
   void _onVerseComplete() {
@@ -285,7 +355,17 @@ class QuranAudioService extends ChangeNotifier {
 
     if (_currentRepeat < effectiveRepeatCount) {
       // Encore des répétitions pour ce verset
-      _playCurrentVerse();
+      if (_nextPreloaded) {
+        _swapPlayers();
+        _player.resume();
+        _isPlaying = true;
+        _isPaused = false;
+        _position = Duration.zero;
+        notifyListeners();
+        _preloadNext();
+      } else {
+        _playCurrentVerse();
+      }
     } else {
       // Verset terminé — notifier le callback de tracking
       final entry = currentEntry;
@@ -308,10 +388,21 @@ class QuranAudioService extends ChangeNotifier {
         final nextEntry = currentEntry;
         if (nextEntry != null && nextEntry.surah != entry?.surah) {
           _currentSurahNumber = nextEntry.surah;
-          // Le nom sera mis à jour par le provider quand les données arrivent
         }
 
-        _playCurrentVerse();
+        if (_nextPreloaded) {
+          // Transition gapless : swap et play immédiat
+          _swapPlayers();
+          _player.resume();
+          _isPlaying = true;
+          _isPaused = false;
+          _position = Duration.zero;
+          notifyListeners();
+          _preloadNext();
+        } else {
+          // Fallback : chargement classique
+          _playCurrentVerse();
+        }
       } else {
         // Fin de la playlist
         _isPlaying = false;
@@ -362,6 +453,7 @@ class QuranAudioService extends ChangeNotifier {
     _durationSub?.cancel();
     _completeSub?.cancel();
     _player.dispose();
+    _nextPlayer.dispose();
     super.dispose();
   }
 }
