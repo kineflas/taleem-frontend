@@ -113,6 +113,29 @@ class HifzMapScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              // Lecteur Quran
+              GestureDetector(
+                onTap: () => context.push('/quran-player'),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: HifzColors.ivory.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.headphones_rounded,
+                          color: HifzColors.ivory, size: 18),
+                      SizedBox(width: 4),
+                      Icon(Icons.play_arrow_rounded,
+                          color: HifzColors.ivory, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               // Streak
               if (map.currentStreak > 0)
                 Container(

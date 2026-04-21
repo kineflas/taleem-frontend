@@ -51,6 +51,7 @@ import '../../features/medine_v2/screens/final_exam_screen.dart';
 import '../../features/medine_v2/screens/diagnostic_screen_v2.dart';
 import '../../features/odyssee_lettres/screens/odyssee_map_screen.dart';
 import '../../features/odyssee_lettres/screens/odyssee_lesson_flow_screen.dart';
+import '../../features/quran_player/screens/quran_player_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
@@ -342,6 +343,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             allVerses: extra['allVerses'] as List<EnrichedVerse>,
           );
         },
+      ),
+
+      // Quran Audio Player (full screen)
+      GoRoute(
+        path: '/quran-player',
+        builder: (_, __) => const QuranPlayerScreen(),
       ),
     ],
     errorBuilder: (_, state) => Scaffold(
