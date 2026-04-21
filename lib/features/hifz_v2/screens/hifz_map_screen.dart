@@ -8,7 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../data/hifz_v2_service.dart' show JourneyMapResponse, SurahMapEntry, WirdTodayResponse, EnrichedSurahResponse;
 import '../models/hifz_v2_theme.dart';
+import '../models/wird_models.dart';
 import '../providers/hifz_v2_provider.dart';
+import '../../quran_player/providers/quran_player_provider.dart';
+import '../../quran_player/services/quran_audio_service.dart';
+import '../../quran_player/models/player_models.dart';
 
 class HifzMapScreen extends ConsumerWidget {
   const HifzMapScreen({super.key});
@@ -433,242 +437,576 @@ class _SurahCard extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       isScrollControlled: true,
-      builder: (ctx) {
-        final bottomPad = MediaQuery.of(ctx).padding.bottom;
+      builder: (ctx) => _SurahDetailModal(surah: surah),
+    );
+  }
+}
 
-        return Container(
-          // Hauteur fixe : 70% de l'écran max
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+/// ── Modal détail sourate avec lecteur embarqué ──────────────────
+
+class _SurahDetailModal extends ConsumerStatefulWidget {
+  const _SurahDetailModal({required this.surah});
+  final SurahMapEntry surah;
+
+  @override
+  ConsumerState<_SurahDetailModal> createState() => _SurahDetailModalState();
+}
+
+class _SurahDetailModalState extends ConsumerState<_SurahDetailModal> {
+  bool _isPlayerMode = false;
+  bool _isLaunchingWird = false;
+  final ScrollController _scrollController = ScrollController();
+
+  SurahMapEntry get surah => widget.surah;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Lance le Wird directement sur la sourate sélectionnée.
+  Future<void> _launchWird() async {
+    if (_isLaunchingWird) return;
+    setState(() => _isLaunchingWird = true);
+
+    try {
+      final service = ref.read(hifzV2ServiceProvider);
+
+      // 1. Récupérer le Wird pour cette sourate
+      final wird = await service.fetchWirdToday(surahNumber: surah.surahNumber);
+
+      // 2. Charger le contenu enrichi
+      final surahNumbers = <int>{};
+      for (final bloc in wird.blocs) {
+        for (final v in bloc.verses) {
+          surahNumbers.add(v.surahNumber);
+        }
+      }
+
+      final surahContents = <int, EnrichedSurahResponse>{};
+      final futures = surahNumbers.map(
+        (sn) =>
+            service.fetchSurahContent(sn).then((r) => surahContents[sn] = r),
+      );
+      await Future.wait(futures);
+
+      // 3. Construire les EnrichedVerse pour chaque bloc
+      EnrichedVerse? findVerse(int s, int v) {
+        final content = surahContents[s];
+        if (content == null) return null;
+        return content.verses
+            .where((ev) => ev.verseNumber == v)
+            .firstOrNull;
+      }
+
+      final jadidVerses = <EnrichedVerse>[];
+      final qaribVerses = <EnrichedVerse>[];
+      final baidVerses = <EnrichedVerse>[];
+
+      for (final bloc in wird.blocs) {
+        for (final v in bloc.verses) {
+          final enriched = findVerse(v.surahNumber, v.verseNumber);
+          if (enriched == null) continue;
+          switch (bloc.blocType) {
+            case 'JADID':
+              jadidVerses.add(enriched);
+            case 'QARIB':
+              qaribVerses.add(enriched);
+            case 'BAID':
+              baidVerses.add(enriched);
+          }
+        }
+      }
+
+      if (jadidVerses.isEmpty && qaribVerses.isEmpty && baidVerses.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Aucun verset disponible pour cette sourate'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final session = WirdSession(
+        date: DateTime.now(),
+        jadidVerses: jadidVerses,
+        qaribVerses: qaribVerses,
+        baidVerses: baidVerses,
+        reciterFolder: wird.reciterFolder,
+      );
+
+      // 4. Démarrer la session backend
+      await ref
+          .read(wirdSessionProvider.notifier)
+          .start(surahNumber: surah.surahNumber);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Fermer la modale
+      context.push('/hifz-v2/wird', extra: session);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLaunchingWird = false);
+    }
+  }
+
+  /// Active le mode lecteur embarqué.
+  void _startPlayer(EnrichedSurahResponse content) {
+    final audioService = ref.read(quranAudioServiceProvider);
+    audioService.buildLecturePlaylist(
+      surah: surah.surahNumber,
+      startVerse: 1,
+      endVerse: content.verseCount,
+      surahName: content.nameAr,
+    );
+    audioService.play();
+    setState(() => _isPlayerMode = true);
+  }
+
+  /// Arrête le lecteur et revient aux boutons d'action.
+  void _stopPlayer() {
+    ref.read(quranAudioServiceProvider).stop();
+    setState(() => _isPlayerMode = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final asyncContent = ref.watch(surahContentProvider(surah.surahNumber));
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.75,
+      ),
+      child: asyncContent.when(
+        loading: () => const Center(
+          child: Padding(
+            padding: EdgeInsets.all(48),
+            child: CircularProgressIndicator(color: HifzColors.emerald),
           ),
-          child: Consumer(
-            builder: (context, ref, _) {
-              final asyncContent =
-                  ref.watch(surahContentProvider(surah.surahNumber));
+        ),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Text('Erreur : $e',
+                style: HifzTypo.body(color: HifzColors.textLight)),
+          ),
+        ),
+        data: (content) {
+          final audioService = ref.watch(quranAudioServiceProvider);
 
-              return asyncContent.when(
-                loading: () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(48),
-                    child: CircularProgressIndicator(color: HifzColors.emerald),
-                  ),
-                ),
-                error: (e, _) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(
-                      'Erreur : $e',
-                      style: HifzTypo.body(color: HifzColors.textLight),
+          return Column(
+            children: [
+              // ── Drag handle ──
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: HifzColors.ivoryDark,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-                data: (content) => Column(
+              ),
+
+              // ── Header fixe ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Column(
                   children: [
-                    // ── Drag handle ──
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: HifzColors.ivoryDark,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+                    Text(
+                      content.nameAr,
+                      textAlign: TextAlign.center,
+                      textDirection: TextDirection.rtl,
+                      style: HifzTypo.verse(size: 28, color: HifzColors.emerald),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${content.nameFr} — ${content.verseCount} versets',
+                      textAlign: TextAlign.center,
+                      style: HifzTypo.body(color: HifzColors.textMedium),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _MiniStat(
+                            '${surah.versesStarted}/${surah.totalVerses}',
+                            'Versets'),
+                        _MiniStat('${surah.totalStars}', 'Étoiles'),
+                        _MiniStat(
+                            '${surah.averageScore.round()}%', 'Score moy.'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(color: HifzColors.ivoryDark),
+                  ],
+                ),
+              ),
+
+              // ── Liste des versets (scrollable) ──
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomPad),
+                  itemCount: content.verses.length,
+                  itemBuilder: (_, i) {
+                    final v = content.verses[i];
+                    final isCurrentVerse = _isPlayerMode &&
+                        audioService.currentEntry != null &&
+                        audioService.currentEntry!.verse == v.verseNumber;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isCurrentVerse
+                              ? HifzColors.gold.withOpacity(0.08)
+                              : HifzColors.ivoryWarm,
+                          borderRadius: BorderRadius.circular(12),
+                          border: isCurrentVerse
+                              ? Border.all(
+                                  color: HifzColors.gold.withOpacity(0.4),
+                                  width: 1.5)
+                              : null,
                         ),
-                      ),
-                    ),
-
-                    // ── Header fixe (ne scroll pas) ──
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                      child: Column(
-                        children: [
-                          Text(
-                            content.nameAr,
-                            textAlign: TextAlign.center,
-                            textDirection: TextDirection.rtl,
-                            style: HifzTypo.verse(
-                                size: 28, color: HifzColors.emerald),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${content.nameFr} — ${content.verseCount} versets',
-                            textAlign: TextAlign.center,
-                            style: HifzTypo.body(color: HifzColors.textMedium),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _MiniStat(
-                                  '${surah.versesStarted}/${surah.totalVerses}',
-                                  'Versets'),
-                              _MiniStat(
-                                  '${surah.totalStars}', 'Étoiles'),
-                              _MiniStat(
-                                  '${surah.averageScore.round()}%',
-                                  'Score moy.'),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          const Divider(color: HifzColors.ivoryDark),
-                        ],
-                      ),
-                    ),
-
-                    // ── Liste des versets (scrollable) ──
-                    Expanded(
-                      child: ListView.builder(
-                        padding: EdgeInsets.fromLTRB(20, 8, 20, 16 + bottomPad),
-                        itemCount: content.verses.length,
-                        itemBuilder: (_, i) {
-                          final v = content.verses[i];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: HifzColors.ivoryWarm,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Numéro du verset
-                                  Row(
-                                    children: [
-                                      Container(
-                                        width: 28,
-                                        height: 28,
-                                        decoration: BoxDecoration(
-                                          color: HifzColors.emerald
-                                              .withOpacity(0.1),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        alignment: Alignment.center,
-                                        child: Text(
-                                          '${i + 1}',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 28,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: isCurrentVerse
+                                        ? HifzColors.gold.withOpacity(0.2)
+                                        : HifzColors.emerald.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: isCurrentVerse
+                                      ? Icon(Icons.volume_up_rounded,
+                                          color: HifzColors.gold, size: 14)
+                                      : Text(
+                                          '${v.verseNumber}',
                                           style: HifzTypo.body(
                                                   color: HifzColors.emerald)
                                               .copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 12),
                                         ),
+                                ),
+                                const Spacer(),
+                                // Mini play button per verse
+                                if (_isPlayerMode)
+                                  GestureDetector(
+                                    onTap: () {
+                                      final idx = audioService.playlist.indexWhere(
+                                          (e) => e.verse == v.verseNumber);
+                                      if (idx >= 0) audioService.jumpToIndex(idx);
+                                    },
+                                    child: Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: isCurrentVerse
+                                            ? HifzColors.gold.withOpacity(0.15)
+                                            : HifzColors.emerald.withOpacity(0.08),
+                                        shape: BoxShape.circle,
                                       ),
-                                      const Spacer(),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    v.textAr,
-                                    textAlign: TextAlign.right,
-                                    textDirection: TextDirection.rtl,
-                                    style: HifzTypo.verse(size: 20),
-                                  ),
-                                  if (v.textFr != null &&
-                                      v.textFr!.isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      v.textFr!,
-                                      style: HifzTypo.translation(),
+                                      alignment: Alignment.center,
+                                      child: Icon(
+                                        isCurrentVerse
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded,
+                                        size: 14,
+                                        color: isCurrentVerse
+                                            ? HifzColors.gold
+                                            : HifzColors.emerald,
+                                      ),
                                     ),
-                                  ],
-                                ],
-                              ),
+                                  ),
+                              ],
                             ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    // ── Boutons d'action ──
-                    Container(
-                      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
-                      decoration: BoxDecoration(
-                        color: HifzColors.ivory,
-                        border: Border(
-                          top: BorderSide(
-                              color: HifzColors.ivoryDark, width: 1),
+                            const SizedBox(height: 8),
+                            Text(
+                              v.textAr,
+                              textAlign: TextAlign.right,
+                              textDirection: TextDirection.rtl,
+                              style: HifzTypo.verse(size: 20),
+                            ),
+                            if (v.textFr != null && v.textFr!.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(v.textFr!, style: HifzTypo.translation()),
+                            ],
+                          ],
                         ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Ligne 1 : Écouter + Mémoriser
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ActionButton(
-                                  icon: Icons.headphones_rounded,
-                                  label: 'Écouter',
-                                  color: const Color(0xFF5C6BC0),
-                                  onTap: () {
-                                    Navigator.of(ctx).pop();
-                                    context.push('/quran-player');
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _ActionButton(
-                                  icon: Icons.auto_stories_rounded,
-                                  label: 'Mémoriser',
-                                  color: HifzColors.emerald,
-                                  onTap: () {
-                                    Navigator.of(ctx).pop();
-                                    context.push('/hifz-v2/ikhtiar');
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          // Ligne 2 : Vérifier ASR + Fermer
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ActionButton(
-                                  icon: Icons.mic_rounded,
-                                  label: 'Vérifier (ASR)',
-                                  color: HifzColors.gold,
-                                  onTap: () {
-                                    Navigator.of(ctx).pop();
-                                    context.push(
-                                      '/hifz-v2/surah-asr',
-                                      extra: {
-                                        'surahNumber': surah.surahNumber,
-                                        'surahNameAr': surah.nameAr,
-                                        'surahNameFr': surah.nameFr,
-                                        'allVerses': content.verses,
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: OutlinedButton(
-                                  style: HifzDecor.secondaryButton.copyWith(
-                                    minimumSize: const WidgetStatePropertyAll(
-                                        Size.fromHeight(44)),
-                                  ),
-                                  onPressed: () => Navigator.of(ctx).pop(),
-                                  child: const Text('Fermer'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // ── Footer : lecteur embarqué OU boutons d'action ──
+              _isPlayerMode
+                  ? _buildEmbeddedPlayer(audioService, bottomPad)
+                  : _buildActionButtons(content, bottomPad),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Lecteur audio embarqué dans le footer de la modale.
+  Widget _buildEmbeddedPlayer(QuranAudioService audio, double bottomPad) {
+    final entry = audio.currentEntry;
+    final progress = audio.duration.inMilliseconds > 0
+        ? audio.position.inMilliseconds / audio.duration.inMilliseconds
+        : 0.0;
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomPad),
+      decoration: BoxDecoration(
+        color: const Color(0xFF5C6BC0).withOpacity(0.06),
+        border: const Border(
+          top: BorderSide(color: Color(0xFFBBBFD6), width: 0.5),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Barre de progression
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 3,
+              backgroundColor: const Color(0xFF5C6BC0).withOpacity(0.12),
+              valueColor:
+                  const AlwaysStoppedAnimation(Color(0xFF5C6BC0)),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Contrôles
+          Row(
+            children: [
+              // Info verset actuel
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry != null
+                          ? 'Verset ${entry.verse}/${audio.playlist.length}'
+                          : 'Prêt',
+                      style: HifzTypo.body(color: const Color(0xFF5C6BC0))
+                          .copyWith(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    Text(
+                      'x${audio.globalRepeat} — ${audio.reciter.nameFr}',
+                      style: HifzTypo.body(color: HifzColors.textLight)
+                          .copyWith(fontSize: 11),
                     ),
                   ],
                 ),
-              );
-            },
+              ),
+
+              // Prev
+              _PlayerIconButton(
+                icon: Icons.skip_previous_rounded,
+                onTap: audio.currentIndex > 0 ? () => audio.previous() : null,
+              ),
+              const SizedBox(width: 4),
+
+              // Play/Pause (plus grand)
+              GestureDetector(
+                onTap: () => audio.togglePlayPause(),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF5C6BC0),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    audio.isPlaying
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    color: HifzColors.ivory,
+                    size: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+
+              // Next
+              _PlayerIconButton(
+                icon: Icons.skip_next_rounded,
+                onTap: audio.currentIndex < audio.playlist.length - 1
+                    ? () => audio.next()
+                    : null,
+              ),
+              const SizedBox(width: 8),
+
+              // Repeat cycle
+              _PlayerIconButton(
+                icon: Icons.repeat_rounded,
+                label: 'x${audio.globalRepeat}',
+                onTap: () {
+                  final next = audio.globalRepeat >= 5 ? 1 : audio.globalRepeat + 1;
+                  audio.setGlobalRepeat(next);
+                },
+              ),
+              const SizedBox(width: 4),
+
+              // Fermer le player
+              _PlayerIconButton(
+                icon: Icons.close_rounded,
+                onTap: _stopPlayer,
+                color: HifzColors.textLight,
+              ),
+            ],
           ),
-        );
-      },
+        ],
+      ),
+    );
+  }
+
+  /// Boutons d'action classiques (Écouter / Mémoriser / ASR / Fermer).
+  Widget _buildActionButtons(
+      EnrichedSurahResponse content, double bottomPad) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
+      decoration: BoxDecoration(
+        color: HifzColors.ivory,
+        border: const Border(
+          top: BorderSide(color: HifzColors.ivoryDark, width: 1),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ligne 1 : Écouter + Mémoriser
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.headphones_rounded,
+                  label: 'Écouter',
+                  color: const Color(0xFF5C6BC0),
+                  onTap: () => _startPlayer(content),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.auto_stories_rounded,
+                  label: _isLaunchingWird ? 'Chargement...' : 'Mémoriser',
+                  color: HifzColors.emerald,
+                  onTap: _isLaunchingWird ? () {} : _launchWird,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Ligne 2 : Vérifier ASR + Fermer
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  icon: Icons.mic_rounded,
+                  label: 'Vérifier (ASR)',
+                  color: HifzColors.gold,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push(
+                      '/hifz-v2/surah-asr',
+                      extra: {
+                        'surahNumber': surah.surahNumber,
+                        'surahNameAr': surah.nameAr,
+                        'surahNameFr': surah.nameFr,
+                        'allVerses': content.verses,
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  style: HifzDecor.secondaryButton.copyWith(
+                    minimumSize:
+                        const WidgetStatePropertyAll(Size.fromHeight(44)),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Fermer'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Petit bouton icône pour les contrôles du lecteur.
+class _PlayerIconButton extends StatelessWidget {
+  const _PlayerIconButton({
+    required this.icon,
+    required this.onTap,
+    this.label,
+    this.color,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String? label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? const Color(0xFF5C6BC0);
+    final isDisabled = onTap == null;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: isDisabled ? 0.35 : 1.0,
+        child: Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: c, size: 22),
+              if (label != null) ...[
+                const SizedBox(width: 2),
+                Text(
+                  label!,
+                  style: HifzTypo.body(color: c)
+                      .copyWith(fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
