@@ -242,6 +242,30 @@ class AudioOrchestrator extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Joue l'audio une seule fois et attend la fin avant de retourner.
+  /// Utilisé pour l'écoute séquentielle (Istima' du checkpoint).
+  Future<void> playOnceAndWait() async {
+    final completer = Completer<void>();
+
+    StreamSubscription<void>? sub;
+    sub = _reciterPlayer.onPlayerComplete.listen((_) {
+      sub?.cancel();
+      _isPlaying = false;
+      notifyListeners();
+      if (!completer.isCompleted) completer.complete();
+    });
+
+    await _reciterPlayer.setVolume(1.0);
+    _reciterVolume = 1.0;
+    await _reciterPlayer.setPlaybackRate(_playbackRate);
+    await _reciterPlayer.seek(Duration.zero);
+    await _reciterPlayer.resume();
+    _isPlaying = true;
+    notifyListeners();
+
+    return completer.future;
+  }
+
   /// Arrête tout.
   Future<void> stop() async {
     _isPlaying = false;

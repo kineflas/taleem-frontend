@@ -76,24 +76,24 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
     final shouldCheckpoint = _currentBloc == WirdBloc.jadid &&
         _jadidSinceCheckpoint >= _checkpointThreshold;
 
-    if (_currentVerseIdx + 1 < _currentVerses.length) {
+    final hasMoreVerses = _currentVerseIdx + 1 < _currentVerses.length;
+
+    if (shouldCheckpoint) {
+      // Lancer le checkpoint AVANT d'avancer l'index.
+      // L'index sera incrémenté dans _onCheckpointComplete si nécessaire.
+      setState(() {
+        _inCheckpoint = true;
+        _isInFlow = false;
+      });
+    } else if (hasMoreVerses) {
       // Avancer au verset suivant dans le même bloc
       ref.read(wirdSessionProvider.notifier).nextVerse();
       setState(() {
         _currentVerseIdx++;
-
-        if (shouldCheckpoint) {
-          // Lancer le checkpoint avant de continuer
-          _inCheckpoint = true;
-          _isInFlow = false;
-        } else {
-          // Mode Enchaînement : rester dans le flow (auto-avance)
-          // Mode Classique : revenir à l'overview
-          _isInFlow = _autoAdvance;
-        }
+        _isInFlow = _autoAdvance;
       });
     } else {
-      // Bloc terminé — déclencher un checkpoint si des versets sont en attente
+      // Bloc terminé — déclencher un checkpoint si des versets JADID en attente
       if (_currentBloc == WirdBloc.jadid && _checkpointVerses.isNotEmpty) {
         setState(() {
           _inCheckpoint = true;
@@ -107,20 +107,23 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
   /// Appelé quand le CheckpointFlowScreen se termine
   void _onCheckpointComplete(CheckpointResult result) {
-    setState(() {
-      _inCheckpoint = false;
-      _jadidSinceCheckpoint = 0;
-      _checkpointVerses.clear();
+    _inCheckpoint = false;
+    _jadidSinceCheckpoint = 0;
+    _checkpointVerses.clear();
 
-      // Vérifier si le bloc JADID était terminé avant le checkpoint
-      if (_currentVerseIdx >= _currentVerses.length) {
-        // Le bloc est fini → avancer au suivant
-        _advanceBloc();
-      } else {
-        // Reprendre le flow
+    // Avancer au verset suivant (l'index n'a PAS été incrémenté avant le checkpoint)
+    final hasMoreVerses = _currentVerseIdx + 1 < _currentVerses.length;
+
+    if (hasMoreVerses) {
+      ref.read(wirdSessionProvider.notifier).nextVerse();
+      setState(() {
+        _currentVerseIdx++;
         _isInFlow = _autoAdvance;
-      }
-    });
+      });
+    } else {
+      // Dernier verset du bloc → avancer au bloc suivant
+      _advanceBloc();
+    }
   }
 
   void _advanceBloc() {

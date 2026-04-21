@@ -32,9 +32,20 @@ class CurriculumLibraryScreen extends ConsumerWidget {
           final enrollments = enrollmentsAsync.valueOrNull ?? [];
           final enrolledIds = {for (final e in enrollments) e.curriculumProgramId};
 
+          // Hide legacy programs replaced by newer features
+          const hiddenTypes = {
+            CurriculumType.alphabetArabe,    // → L'Odyssée des Lettres
+            CurriculumType.voyellesSyllabes, // → L'Odyssée des Lettres
+            CurriculumType.medineT1,         // → Tome 1 de Médine V2
+            CurriculumType.hifzRevision,     // → Hifz Master V2
+          };
+          final visiblePrograms = programs
+              .where((p) => !hiddenTypes.contains(p.curriculumType))
+              .toList();
+
           // Group programs by category, preserving sort order
           final grouped = <ProgramCategory, List<CurriculumProgram>>{};
-          for (final p in programs) {
+          for (final p in visiblePrograms) {
             grouped.putIfAbsent(p.category, () => []).add(p);
           }
           // Order categories
@@ -110,15 +121,6 @@ class CurriculumLibraryScreen extends ConsumerWidget {
                       subtitleFr: 'Apprenez les mots les plus fréquents du Coran',
                       color: const Color(0xFF00897B),
                       onTap: () => context.go('/student/learn'),
-                    ),
-                    const SizedBox(height: 10),
-                    _FeatureCard(
-                      icon: '🕌',
-                      titleFr: 'Hifz Master',
-                      titleAr: 'حفظ القرآن',
-                      subtitleFr: 'Mémorisez le Coran avec un suivi intelligent',
-                      color: const Color(0xFF6A1B9A),
-                      onTap: () => context.go('/student/hifz'),
                     ),
                     const SizedBox(height: 10),
                     _FeatureCard(

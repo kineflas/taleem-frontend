@@ -59,10 +59,12 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
   @override
   void initState() {
     super.initState();
-    _initAudio();
+    _buildOrchestrators();
   }
 
-  void _initAudio() {
+  /// Crée les orchestrateurs SANS les initialiser.
+  /// L'init (chargement audio) est fait au moment de la lecture (lazy).
+  void _buildOrchestrators() {
     _orchestrators = widget.verses.map((v) {
       final surah = v.surahNumber.toString().padLeft(3, '0');
       final verse = v.verseNumber.toString().padLeft(3, '0');
@@ -70,10 +72,6 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
           'https://everyayah.com/data/${widget.reciterFolder}/$surah$verse.mp3';
       return AudioOrchestrator(verseAudioUrl: url);
     }).toList();
-
-    for (final o in _orchestrators!) {
-      o.init();
-    }
   }
 
   @override
@@ -306,14 +304,25 @@ class _CheckpointFlowScreenState extends ConsumerState<CheckpointFlowScreen> {
                     _advanceStep();
                   },
                 ),
-      CheckpointStep.tasmi => _StepTasmiGrouped(
-          key: const ValueKey('tasmi'),
-          verses: widget.verses,
-          onComplete: (score) {
-            _tasmiScore = score;
-            _advanceStep();
-          },
-        ),
+      // Si l'utilisateur a utilisé l'ASR pour Rabita, on skip
+      // l'auto-évaluation manuelle et on réutilise le score Rabita.
+      CheckpointStep.tasmi => _rabitaMode == 'asr'
+          ? _StepTasmiSkipped(
+              key: const ValueKey('tasmi-skipped'),
+              rabitaScore: _rabitaScore,
+              onContinue: () {
+                _tasmiScore = _rabitaScore;
+                _advanceStep();
+              },
+            )
+          : _StepTasmiGrouped(
+              key: const ValueKey('tasmi'),
+              verses: widget.verses,
+              onComplete: (score) {
+                _tasmiScore = score;
+                _advanceStep();
+              },
+            ),
       CheckpointStep.natija => _CheckpointNatija(
           key: const ValueKey('natija'),
           tartibScore: _tartibScore,
@@ -397,9 +406,14 @@ class _StepIstimaState extends State<_StepIstima> {
       setState(() => _currentIndex = i);
 
       try {
-        await widget.orchestrators[i].playOnce();
-        // Small pause between verses
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Init lazy : charger l'audio juste avant de le jouer
+        await widget.orchestrators[i].init();
+        // Jouer et ATTENDRE la fin avant de passer au suivant
+        await widget.orchestrators[i].playOnceAndWait();
+        // Petite pause entre les versets
+        if (i < widget.verses.length - 1) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
       } catch (_) {
         // Continue on error
       }
@@ -545,6 +559,62 @@ class _AnimatedWaveWidget extends AnimatedWidget {
 
   @override
   Widget build(BuildContext context) => builder(context, child);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Step Tasmi' Skipped — Auto-validé par ASR Rabita
+// ═══════════════════════════════════════════════════════════════════
+
+class _StepTasmiSkipped extends StatelessWidget {
+  const _StepTasmiSkipped({
+    super.key,
+    required this.rabitaScore,
+    required this.onContinue,
+  });
+
+  final int rabitaScore;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.mic_rounded, size: 48, color: HifzColors.emerald),
+          const SizedBox(height: 16),
+          Text(
+            'Récitation validée par ASR',
+            style: HifzTypo.sectionTitle(),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Ta récitation a déjà été évaluée lors de l\'étape Rabita.',
+            style: HifzTypo.body(color: HifzColors.textMedium),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '$rabitaScore%',
+            style: HifzTypo.score(
+              color: rabitaScore >= 70 ? HifzColors.emerald : HifzColors.close,
+            ),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: onContinue,
+              style: HifzDecor.primaryButton,
+              child: const Text('Continuer'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
