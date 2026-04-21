@@ -36,6 +36,7 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
   int _totalVerses = 1;
   bool _showTranslation = false;
   bool _isPlayerActive = false;
+  bool _isRevisionMode = false;
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -52,6 +53,11 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
     // Si le lecteur est actif → afficher le mode lecture
     if (_isPlayerActive) {
       return _buildActivePlayer(audioService);
+    }
+
+    // Si mode révision actif → afficher l'interface de révision SRS
+    if (_isRevisionMode) {
+      return _buildRevisionView(audioService);
     }
 
     return Scaffold(
@@ -211,8 +217,306 @@ class _QuranTabScreenState extends ConsumerState<QuranTabScreen> {
   }
 
   void _launchRevisionMode() {
-    // Naviguer vers le lecteur dédié en mode révision
-    context.push('/quran-player');
+    setState(() => _isRevisionMode = true);
+  }
+
+  /// Interface de révision SRS intégrée dans l'onglet Coran.
+  Widget _buildRevisionView(QuranAudioService audioService) {
+    final playlistAsync = ref.watch(revisionPlaylistProvider);
+    final isActive = audioService.isPlaying || audioService.isPaused;
+
+    return Scaffold(
+      backgroundColor: HifzColors.ivory,
+      appBar: AppBar(
+        backgroundColor: HifzColors.ivory,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded,
+              color: HifzColors.textDark, size: 20),
+          onPressed: () {
+            audioService.stop();
+            setState(() => _isRevisionMode = false);
+          },
+        ),
+        title: Text('Révision SRS', style: HifzTypo.sectionTitle()),
+        centerTitle: true,
+      ),
+      body: playlistAsync.when(
+        loading: () => const Center(
+            child: CircularProgressIndicator(color: HifzColors.emerald)),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cloud_off_rounded,
+                    size: 48, color: HifzColors.textLight),
+                const SizedBox(height: 16),
+                Text('Erreur de chargement',
+                    style: HifzTypo.sectionTitle(),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 8),
+                Text(
+                  'Impossible de récupérer la playlist de révision.\nVérifiez votre connexion et réessayez.',
+                  style: HifzTypo.body(),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  style: HifzDecor.primaryButton,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Réessayer'),
+                  onPressed: () => ref.invalidate(revisionPlaylistProvider),
+                ),
+              ],
+            ),
+          ),
+        ),
+        data: (verses) {
+          if (verses.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline_rounded,
+                        size: 64, color: HifzColors.emerald.withOpacity(0.5)),
+                    const SizedBox(height: 16),
+                    Text('Aucun verset à réviser',
+                        style: HifzTypo.sectionTitle(),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tous vos versets sont à jour ! Commencez par mémoriser de nouveaux versets dans le Wird.',
+                      style: HifzTypo.body(),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              // ── Player actif ──
+              if (isActive)
+                Expanded(
+                  child: ListenableBuilder(
+                    listenable: audioService,
+                    builder: (context, _) {
+                      final entry = audioService.currentEntry;
+                      if (entry == null) return const SizedBox();
+
+                      final surahText =
+                          ref.watch(surahTextProvider(entry.surah));
+
+                      return surahText.when(
+                        data: (versesMap) {
+                          final text = versesMap[entry.verse] ?? '';
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Tier badge
+                                  if (entry.srsTier != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _tierColor(entry.srsTier!)
+                                            .withOpacity(0.15),
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        entry.srsTier!.toUpperCase(),
+                                        style: HifzTypo.stepLabel(
+                                            color:
+                                                _tierColor(entry.srsTier!)),
+                                      ),
+                                    ),
+                                  const SizedBox(height: 16),
+                                  Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: Text(
+                                      text,
+                                      style: GoogleFonts.amiri(
+                                        fontSize: 28,
+                                        height: 2.0,
+                                        color: HifzColors.textDark,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'Sourate ${entry.surah} — Verset ${entry.verse}',
+                                    style: HifzTypo.body(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        loading: () => const Center(
+                            child: CircularProgressIndicator(
+                                color: HifzColors.emerald)),
+                        error: (_, __) => const SizedBox(),
+                      );
+                    },
+                  ),
+                ),
+
+              // ── Résumé playlist + lancer (quand pas encore actif) ──
+              if (!isActive) ...[
+                // Stats
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: HifzDecor.card,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.library_music_rounded,
+                                size: 20, color: HifzColors.emerald),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: Text('Versets à réviser',
+                                    style: HifzTypo.body())),
+                            Text('${verses.length}',
+                                style: GoogleFonts.nunito(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: HifzColors.textDark)),
+                          ],
+                        ),
+                        const Divider(height: 16),
+                        Row(
+                          children: [
+                            Icon(Icons.timer_rounded,
+                                size: 20, color: HifzColors.emerald),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: Text('Durée estimée',
+                                    style: HifzTypo.body())),
+                            Text(
+                                '~${(verses.fold<int>(0, (s, v) => s + v.adaptiveRepeat) * 8 / 60).ceil()} min',
+                                style: GoogleFonts.nunito(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: HifzColors.textDark)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Liste des versets
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: verses.length,
+                    itemBuilder: (context, i) {
+                      final v = verses[i];
+                      final color = _tierColor(v.tier);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                  shape: BoxShape.circle, color: color),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${v.surahNameAr} — v${v.verse}',
+                                style:
+                                    HifzTypo.body(color: HifzColors.textDark),
+                              ),
+                            ),
+                            Text('${v.adaptiveRepeat}×',
+                                style: GoogleFonts.nunito(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: HifzColors.textMedium)),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(v.tier.toUpperCase(),
+                                  style: GoogleFonts.nunito(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: color)),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                // Bouton lancer
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: HifzDecor.primaryButton,
+                      icon: const Icon(Icons.play_arrow_rounded),
+                      label: const Text('Lancer la révision'),
+                      onPressed: () {
+                        audioService.buildRevisionPlaylist(verses);
+                        audioService.play();
+                      },
+                    ),
+                  ),
+                ),
+              ],
+
+              // Contrôles audio (quand actif)
+              if (isActive) PlayerControls(service: audioService),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Color _tierColor(String tier) {
+    switch (tier.toLowerCase()) {
+      case 'fragile':
+        return HifzColors.srsFragile;
+      case 'en_cours':
+        return HifzColors.srsEnCours;
+      case 'acquis':
+        return HifzColors.srsAcquis;
+      case 'solide':
+        return HifzColors.srsSolide;
+      case 'maitrise':
+      case 'maîtrisé':
+        return HifzColors.srsMaitrise;
+      case 'ancre':
+      case 'ancré':
+        return HifzColors.srsAncre;
+      default:
+        return HifzColors.srsNew;
+    }
   }
 
   Widget _buildActivePlayer(QuranAudioService audioService) {

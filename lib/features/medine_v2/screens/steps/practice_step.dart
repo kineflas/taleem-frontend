@@ -376,10 +376,10 @@ List<String> _extractOptionsFromPrompt(String? prompt) {
     final trimmed = p.trim().replaceAll(RegExp(r'[()（）]'), '').trim();
     if (trimmed.isNotEmpty && arabicRe.hasMatch(trimmed)) {
       // Extract just the Arabic portion if mixed with French
+      // Keep tatweel/kashida (ـ) as answers may contain them (e.g. ـِي، ـكَ، الـ)
       final arabicOnly = trimmed
           .split(' ')
           .where((w) => arabicRe.hasMatch(w))
-          .map((w) => w.replaceAll('\u0640', '')) // Remove tatweel/kashida
           .join(' ')
           .trim();
       if (arabicOnly.isNotEmpty) options.add(arabicOnly);
@@ -475,6 +475,21 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
   void initState() {
     super.initState();
     _options = _extractOptionsFromPrompt(widget.exercise.promptFr);
+
+    // Fallback: when the prompt doesn't contain "avec X ou Y",
+    // generate options from the unique answers across all items.
+    // This covers exercises like "Mettez le verbe au féminin passé",
+    // "Accordez l'adjectif", "Donnez le pluriel", etc.
+    if (_options.isEmpty && widget.exercise.items.isNotEmpty) {
+      final answerSet = <String>{};
+      for (final item in widget.exercise.items) {
+        final a = (item.answer ?? '').trim();
+        if (a.isNotEmpty) answerSet.add(a);
+      }
+      if (answerSet.length > 1) {
+        _options = answerSet.toList()..shuffle(Random());
+      }
+    }
   }
 
   void _selectOption(String option) {

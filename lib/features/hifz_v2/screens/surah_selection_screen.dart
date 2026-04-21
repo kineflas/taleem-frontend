@@ -235,19 +235,13 @@ class _SurahSelectionScreenState extends ConsumerState<SurahSelectionScreen> {
           itemBuilder: (context, i) {
             // 114 first (from end of list)
             final surah = map.surahs[map.surahs.length - 1 - i];
-            // Mode Rapide : éligible si ≥80% des versets sont démarrés
-            // et score moyen ≥ 55 (Acquis/Tier 4+)
-            final isQuickEligible = surah.totalVerses > 0 &&
-                surah.versesStarted / surah.totalVerses >= 0.80 &&
-                surah.averageScore >= 55;
+            // Quick-Verify toujours disponible : l'élève peut déjà
+            // connaître des sourates avant de commencer le parcours.
             return _AllSurahCard(
               surah: surah,
               onTap: () => _launchWird(surah.surahNumber),
-              onQuickVerify: isQuickEligible
-                  ? () => _launchQuickVerify(surah.surahNumber, surah.nameAr, surah.nameFr)
-                  : null,
-              // ASR disponible pour TOUTES les sourates — permet de valider
-              // une sourate déjà connue sans avoir à démarrer 80% des versets
+              onQuickVerify: () => _launchQuickVerify(surah.surahNumber, surah.nameAr, surah.nameFr),
+              // ASR disponible pour TOUTES les sourates
               onAsrVerify: () => _launchAsrVerify(surah.surahNumber, surah.nameAr, surah.nameFr),
             );
           },

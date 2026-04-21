@@ -6,7 +6,8 @@
 ///   ③ Tasmi' Complet — Récitation de la sourate (auto-éval)
 ///   ④ Natija Express — Score + mise à jour SRS en batch
 ///
-/// Critère d'accès : ≥80% des versets au Tier 4+ (Acquis).
+/// Accessible pour toute sourate — l'élève peut déjà connaître
+/// des sourates avant de commencer le parcours.
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
