@@ -11,10 +11,13 @@ import '../../features/teacher/screens/student_detail_screen.dart';
 import '../../features/teacher/screens/create_task_screen.dart';
 import '../../features/teacher/screens/teacher_settings_screen.dart';
 import '../../features/student/screens/student_shell_screen.dart';
+import '../../features/student/screens/student_home_screen.dart';
 import '../../features/student/screens/student_today_screen.dart';
 import '../../features/student/screens/agenda_screen.dart';
 import '../../features/student/screens/progress_screen.dart';
 import '../../features/student/screens/student_settings_screen.dart';
+import '../../features/student/screens/quran_tab_screen.dart';
+import '../../features/student/screens/profile_tab_screen.dart';
 import '../../features/curriculum/screens/curriculum_library_screen.dart';
 import '../../features/curriculum/screens/curriculum_program_screen.dart';
 import '../../features/curriculum/screens/curriculum_unit_screen.dart';
@@ -115,21 +118,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // Student shell with bottom nav
+      // Student shell with bottom nav (4 tabs: Accueil / Coran / Parcours / Profil)
       ShellRoute(
         builder: (_, __, child) => StudentShellScreen(child: child),
         routes: [
-          GoRoute(path: '/student', builder: (_, __) => const StudentTodayScreen()),
-          GoRoute(path: '/student/agenda', builder: (_, __) => const AgendaScreen()),
-          GoRoute(path: '/student/progress', builder: (_, __) => const ProgressScreen()),
+          // Tab 1 — Accueil
+          GoRoute(path: '/student', builder: (_, __) => const StudentHomeScreen()),
+          // Tab 2 — Coran (lecteur + accès rapide)
+          GoRoute(path: '/student/quran', builder: (_, __) => const QuranTabScreen()),
+          // Tab 3 — Parcours
           GoRoute(path: '/student/curriculum', builder: (_, __) => const CurriculumLibraryScreen()),
+          // Tab 4 — Profil (progression + agenda + réglages)
+          GoRoute(path: '/student/profile', builder: (_, __) => const ProfileTabScreen()),
+          // Routes accessibles depuis les tabs mais dans le shell
+          GoRoute(path: '/student/hifz-v2', builder: (_, __) => const HifzMapScreen()),
           GoRoute(path: '/student/learn', builder: (_, __) => const LearningHubScreen()),
           GoRoute(path: '/student/hifz', builder: (_, __) => const HifzHubScreen()),
           GoRoute(path: '/student/medine', builder: (_, __) => const LessonListScreen()),
           GoRoute(path: '/student/medine-v2', builder: (_, __) => const CaravaneMapScreen()),
-          GoRoute(path: '/student/hifz-v2', builder: (_, __) => const HifzMapScreen()),
           GoRoute(path: '/student/odyssee', builder: (_, __) => const OdysseeMapScreen()),
+          // Legacy routes — redirigés vers le nouveau profil
           GoRoute(path: '/student/settings', builder: (_, __) => const StudentSettingsScreen()),
+          GoRoute(path: '/student/agenda', builder: (_, __) => const AgendaScreen()),
+          GoRoute(path: '/student/progress', builder: (_, __) => const ProgressScreen()),
         ],
       ),
 

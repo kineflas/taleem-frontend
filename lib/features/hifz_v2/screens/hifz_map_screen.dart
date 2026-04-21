@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../data/hifz_v2_service.dart' show JourneyMapResponse, SurahMapEntry, WirdTodayResponse;
+import '../data/hifz_v2_service.dart' show JourneyMapResponse, SurahMapEntry, WirdTodayResponse, EnrichedSurahResponse;
 import '../models/hifz_v2_theme.dart';
 import '../providers/hifz_v2_provider.dart';
 
@@ -582,9 +582,9 @@ class _SurahCard extends ConsumerWidget {
                       ),
                     ),
 
-                    // ── Bouton fermer en bas ──
+                    // ── Boutons d'action ──
                     Container(
-                      padding: EdgeInsets.fromLTRB(20, 10, 20, 12 + bottomPad),
+                      padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomPad),
                       decoration: BoxDecoration(
                         color: HifzColors.ivory,
                         border: Border(
@@ -592,13 +592,74 @@ class _SurahCard extends ConsumerWidget {
                               color: HifzColors.ivoryDark, width: 1),
                         ),
                       ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          style: HifzDecor.secondaryButton,
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          child: const Text('Fermer'),
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Ligne 1 : Écouter + Mémoriser
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _ActionButton(
+                                  icon: Icons.headphones_rounded,
+                                  label: 'Écouter',
+                                  color: const Color(0xFF5C6BC0),
+                                  onTap: () {
+                                    Navigator.of(ctx).pop();
+                                    context.push('/quran-player');
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _ActionButton(
+                                  icon: Icons.auto_stories_rounded,
+                                  label: 'Mémoriser',
+                                  color: HifzColors.emerald,
+                                  onTap: () {
+                                    Navigator.of(ctx).pop();
+                                    context.push('/hifz-v2/ikhtiar');
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          // Ligne 2 : Vérifier ASR + Fermer
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _ActionButton(
+                                  icon: Icons.mic_rounded,
+                                  label: 'Vérifier (ASR)',
+                                  color: HifzColors.gold,
+                                  onTap: () {
+                                    Navigator.of(ctx).pop();
+                                    context.push(
+                                      '/hifz-v2/surah-asr',
+                                      extra: {
+                                        'surahNumber': surah.surahNumber,
+                                        'surahNameAr': surah.nameAr,
+                                        'surahNameFr': surah.nameFr,
+                                        'allVerses': content.verses,
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: HifzDecor.secondaryButton.copyWith(
+                                    minimumSize: const WidgetStatePropertyAll(
+                                        Size.fromHeight(44)),
+                                  ),
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('Fermer'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -624,6 +685,53 @@ class _MiniStat extends StatelessWidget {
         Text(value, style: HifzTypo.sectionTitle(color: HifzColors.emerald)),
         Text(label, style: HifzTypo.body(color: HifzColors.textLight)),
       ],
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: HifzTypo.body(color: color).copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
