@@ -194,6 +194,7 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
     // ── Checkpoint en cours ──
     if (_inCheckpoint && _checkpointVerses.isNotEmpty) {
       return CheckpointFlowScreen(
+        key: ValueKey('checkpoint-$_currentVerseIdx'),
         verses: List.of(_checkpointVerses),
         reciterFolder: widget.session.reciterFolder,
         onComplete: _onCheckpointComplete,
@@ -202,6 +203,7 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
     if (_isInFlow && _currentVerses.isNotEmpty) {
       return WirdVerseFlowScreen(
+        key: ValueKey('${_currentBloc.name}-$_currentVerseIdx'),
         verse: _currentVerses[_currentVerseIdx],
         reciterFolder: widget.session.reciterFolder,
         bloc: _currentBloc,
