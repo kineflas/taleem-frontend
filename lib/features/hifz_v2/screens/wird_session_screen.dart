@@ -33,13 +33,13 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
   bool _autoAdvance = true; // Mode Enchaînement : auto-avance au verset suivant
 
   // ── Checkpoint tracking ──
-  /// Nombre de versets JADID complétés depuis le dernier checkpoint
-  int _jadidSinceCheckpoint = 0;
-  /// Seuil de déclenchement du checkpoint (tous les N versets JADID)
-  static const int _checkpointThreshold = 3;
+  /// Checkpoint tous les N versets JADID (3, 6, 9, 12…)
+  static const int _checkpointEvery = 3;
   /// true quand on affiche le CheckpointFlowScreen
   bool _inCheckpoint = false;
-  /// Versets accumulés pour le prochain checkpoint
+  /// Tous les versets JADID complétés dans cette session (ne se vide jamais)
+  final List<EnrichedVerse> _allJadidCompleted = [];
+  /// Versets accumulés pour le checkpoint en cours (vidé après chaque checkpoint)
   final List<EnrichedVerse> _checkpointVerses = [];
 
   List<EnrichedVerse> get _currentVerses => switch (_currentBloc) {
@@ -69,18 +69,18 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
     // ── Checkpoint tracking pour le bloc JADID ──
     if (_currentBloc == WirdBloc.jadid) {
-      _jadidSinceCheckpoint++;
+      _allJadidCompleted.add(_currentVerses[_currentVerseIdx]);
       _checkpointVerses.add(_currentVerses[_currentVerseIdx]);
     }
 
+    // Checkpoint si le total de JADID complétés est un multiple de N (3, 6, 9…)
     final shouldCheckpoint = _currentBloc == WirdBloc.jadid &&
-        _jadidSinceCheckpoint >= _checkpointThreshold;
+        _allJadidCompleted.length % _checkpointEvery == 0;
 
     final hasMoreVerses = _currentVerseIdx + 1 < _currentVerses.length;
 
     if (shouldCheckpoint) {
       // Lancer le checkpoint AVANT d'avancer l'index.
-      // L'index sera incrémenté dans _onCheckpointComplete si nécessaire.
       setState(() {
         _inCheckpoint = true;
         _isInFlow = false;
@@ -111,7 +111,6 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
   /// Appelé quand le CheckpointFlowScreen se termine
   void _onCheckpointComplete(CheckpointResult result) {
     _inCheckpoint = false;
-    _jadidSinceCheckpoint = 0;
     _checkpointVerses.clear();
 
     // Avancer au verset suivant (l'index n'a PAS été incrémenté avant le checkpoint)
@@ -134,8 +133,7 @@ class _WirdSessionScreenState extends ConsumerState<WirdSessionScreen> {
 
     switch (_currentBloc) {
       case WirdBloc.jadid:
-        // Passer au bloc suivant et réinitialiser le compteur checkpoint
-        _jadidSinceCheckpoint = 0;
+        // Passer au bloc suivant — vider le buffer checkpoint
         _checkpointVerses.clear();
 
         if (widget.session.qaribVerses.isNotEmpty) {
