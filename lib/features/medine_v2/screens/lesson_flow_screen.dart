@@ -115,8 +115,11 @@ class _LessonFlowScreenState extends ConsumerState<LessonFlowScreen> {
 
   @override
   void dispose() {
-    // Invalidate the lessons list so the map re-fetches with updated unlock states
-    ref.invalidate(medineV2LessonsProvider);
+    // Invalidate after the frame to avoid using ref during dispose
+    final container = ProviderScope.containerOf(context, listen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      container.invalidate(medineV2LessonsProvider);
+    });
     super.dispose();
   }
 

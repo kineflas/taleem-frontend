@@ -35,6 +35,14 @@ class _ExerciseTakamulState extends State<ExerciseTakamul> {
   void initState() {
     super.initState();
     _gaps = _generateGaps();
+    // If no gaps could be generated (all verses too short), auto-complete
+    if (_gaps.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.onComplete(100);
+        }
+      });
+    }
   }
 
   List<_Gap> _generateGaps() {

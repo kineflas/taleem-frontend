@@ -22,14 +22,23 @@ class _OdysseeMiniLectureStepState extends State<OdysseeMiniLectureStep> {
   int _activeIndex = -1;
   bool _isPlaying = false;
   bool _hasPlayed = false;
-  Timer? _timer;
+  /// All scheduled timers for karaoke highlights (cancellable on dispose)
+  final List<Timer> _timers = [];
 
   MiniLectureData? get _miniLecture => widget.lesson.miniLecture;
+
+  void _cancelTimers() {
+    for (final t in _timers) {
+      t.cancel();
+    }
+    _timers.clear();
+  }
 
   void _startKaraoke() {
     final miniLecture = _miniLecture;
     if (miniLecture == null || miniLecture.items.isEmpty) return;
 
+    _cancelTimers();
     setState(() {
       _isPlaying = true;
       _activeIndex = 0;
@@ -38,17 +47,16 @@ class _OdysseeMiniLectureStepState extends State<OdysseeMiniLectureStep> {
     // Schedule highlights based on delay_ms
     for (int i = 0; i < miniLecture.items.length; i++) {
       final delay = miniLecture.items[i].delayMs;
-      Future.delayed(Duration(milliseconds: delay), () {
+      _timers.add(Timer(Duration(milliseconds: delay), () {
         if (mounted && _isPlaying) {
           setState(() => _activeIndex = i);
-          // TODO: play audio for miniLecture.items[i].audioId
         }
-      });
+      }));
     }
 
     // End after last item + 1.5s
     final lastDelay = miniLecture.items.last.delayMs;
-    Future.delayed(Duration(milliseconds: lastDelay + 1500), () {
+    _timers.add(Timer(Duration(milliseconds: lastDelay + 1500), () {
       if (mounted) {
         setState(() {
           _isPlaying = false;
@@ -56,12 +64,12 @@ class _OdysseeMiniLectureStepState extends State<OdysseeMiniLectureStep> {
           _activeIndex = -1;
         });
       }
-    });
+    }));
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _cancelTimers();
     super.dispose();
   }
 

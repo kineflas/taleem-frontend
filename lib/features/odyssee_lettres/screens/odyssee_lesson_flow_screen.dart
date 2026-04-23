@@ -77,6 +77,7 @@ class _OdysseeLessonFlowScreenState
       // Mark intermediate steps as done
       await api.updateProgress(widget.lessonNumber, 'ecoute');
       await api.updateProgress(widget.lessonNumber, 'discovery');
+      await api.updateProgress(widget.lessonNumber, 'exercises');
       await api.updateProgress(widget.lessonNumber, 'mini_lecture');
 
       if (lesson.quizQuestions.isNotEmpty && _quizAnswers.isNotEmpty) {
@@ -122,7 +123,11 @@ class _OdysseeLessonFlowScreenState
 
   @override
   void dispose() {
-    ref.invalidate(odysseeLessonsProvider);
+    // Invalidate after the frame to avoid using ref during dispose
+    final container = ProviderScope.containerOf(context, listen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      container.invalidate(odysseeLessonsProvider);
+    });
     super.dispose();
   }
 
@@ -178,7 +183,11 @@ class _OdysseeLessonFlowScreenState
               lesson: lesson,
               stars: _existingStars,
               onReviewLesson: () => setState(() => _currentStep = 0),
-              onTakeQuiz: () => setState(() => _currentStep = 5),
+              onTakeQuiz: () => setState(() {
+                _quizAnswers = [];
+                _quizStars = 0;
+                _currentStep = 5;
+              }),
             );
           }
 

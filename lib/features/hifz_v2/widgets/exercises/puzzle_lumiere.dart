@@ -25,27 +25,28 @@ class PuzzleLumiere extends StatefulWidget {
 
 class _PuzzleLumiereState extends State<PuzzleLumiere> {
   late List<String> _correctOrder;
-  late List<String> _shuffledWords;
+  /// Indices into _correctOrder, shuffled. Each entry is a unique index.
+  late List<int> _shuffledIndices;
   final List<String> _placedWords = [];
   int _errors = 0;
   final _startTime = DateTime.now();
   bool _isComplete = false;
-  String? _lastError; // Mot erroné pour feedback
+  int? _lastErrorIdx; // Index erroné pour feedback
 
   @override
   void initState() {
     super.initState();
     _correctOrder = List.from(widget.verse.words);
-    _shuffledWords = List.from(_correctOrder);
+    _shuffledIndices = List.generate(_correctOrder.length, (i) => i);
     final rng = Random(DateTime.now().millisecondsSinceEpoch);
     // Assurer que l'ordre mélangé est différent de l'original
     do {
-      _shuffledWords.shuffle(rng);
-    } while (_shuffledWords.length > 2 &&
-        _listEquals(_shuffledWords, _correctOrder));
+      _shuffledIndices.shuffle(rng);
+    } while (_shuffledIndices.length > 2 &&
+        _listEquals(_shuffledIndices, List.generate(_correctOrder.length, (i) => i)));
   }
 
-  bool _listEquals(List<String> a, List<String> b) {
+  bool _listEquals(List<int> a, List<int> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -53,18 +54,19 @@ class _PuzzleLumiereState extends State<PuzzleLumiere> {
     return true;
   }
 
-  void _onWordTap(String word) {
+  void _onWordTap(int originalIndex) {
     if (_isComplete) return;
 
-    final nextExpected = _correctOrder[_placedWords.length];
+    // The next expected original index is simply the count of placed words
+    final nextExpectedIdx = _placedWords.length;
 
-    if (word == nextExpected) {
+    if (originalIndex == nextExpectedIdx) {
       // Correct
       HapticFeedback.lightImpact();
       setState(() {
-        _placedWords.add(word);
-        _shuffledWords.remove(word);
-        _lastError = null;
+        _placedWords.add(_correctOrder[originalIndex]);
+        _shuffledIndices.remove(originalIndex);
+        _lastErrorIdx = null;
       });
 
       if (_placedWords.length == _correctOrder.length) {
@@ -75,11 +77,11 @@ class _PuzzleLumiereState extends State<PuzzleLumiere> {
       HapticFeedback.mediumImpact();
       setState(() {
         _errors++;
-        _lastError = word;
+        _lastErrorIdx = originalIndex;
       });
       // Réinitialiser le feedback après 800ms
       Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) setState(() => _lastError = null);
+        if (mounted) setState(() => _lastErrorIdx = null);
       });
     }
   }
@@ -193,10 +195,11 @@ class _PuzzleLumiereState extends State<PuzzleLumiere> {
               textDirection: TextDirection.rtl,
               spacing: 10,
               runSpacing: 12,
-              children: _shuffledWords.map((w) {
-                final isError = w == _lastError;
+              children: _shuffledIndices.map((origIdx) {
+                final w = _correctOrder[origIdx];
+                final isError = origIdx == _lastErrorIdx;
                 return GestureDetector(
-                  onTap: () => _onWordTap(w),
+                  onTap: () => _onWordTap(origIdx),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

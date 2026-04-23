@@ -72,16 +72,31 @@ class _ExerciseRabitaState extends State<ExerciseRabita> {
         }
       }
 
-      // Si pas assez de distracteurs (< 3 versets), ajouter des fragments
-      while (distractors.length < 2) {
+      // Si pas assez de distracteurs (< 3 versets), générer des fragments uniques
+      int fallbackAttempts = 0;
+      while (distractors.length < 2 && fallbackAttempts < 20) {
+        fallbackAttempts++;
         final fallback = widget.verses[rng.nextInt(widget.verses.length)];
         final fWords = fallback.words;
+        String candidate;
         if (fWords.length > 4) {
           final start = rng.nextInt(fWords.length - 3);
-          distractors.add(fWords.sublist(start, start + 3).join(' '));
+          candidate = fWords.sublist(start, start + 3).join(' ');
+        } else if (fWords.length > 2) {
+          // Take middle portion or reversed to create variety
+          final start = rng.nextInt(max(1, fWords.length - 2));
+          candidate = fWords.sublist(start, min(start + 3, fWords.length)).join(' ');
         } else {
-          distractors.add(fWords.reversed.take(3).toList().join(' '));
+          candidate = fWords.join(' ') + ' ...';
         }
+        // Only add if truly different from correct answer and other distractors
+        if (candidate != correctAnswer && !distractors.contains(candidate)) {
+          distractors.add(candidate);
+        }
+      }
+      // Ultimate fallback: use verse number reference as distractor
+      while (distractors.length < 2) {
+        distractors.add('...');
       }
 
       // Mélanger les choix

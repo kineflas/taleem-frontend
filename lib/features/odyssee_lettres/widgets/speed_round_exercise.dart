@@ -22,6 +22,8 @@ class _SpeedRoundExerciseState extends State<SpeedRoundExercise> {
   Timer? _timer;
   bool _started = false;
   bool _finished = false;
+  /// Cached shuffled options per item index
+  final Map<int, List<String>> _cachedOptions = {};
 
   @override
   void initState() {
@@ -59,19 +61,19 @@ class _SpeedRoundExerciseState extends State<SpeedRoundExercise> {
   }
 
   List<String> _generateOptions(List<Map<String, dynamic>> items, int currentIdx) {
-    final correctName = items[currentIdx]['name'] ?? '';
-    final names = <String>{correctName};
-    for (final it in items) {
-      if (names.length >= 4) break;
-      final n = it['name'] ?? '';
-      if (n.isNotEmpty) names.add(n);
-    }
-    // Pad if needed
-    while (names.length < 4) {
-      names.add('---');
-    }
-    final list = names.toList()..shuffle();
-    return list;
+    return _cachedOptions.putIfAbsent(currentIdx, () {
+      final correctName = items[currentIdx]['name'] ?? '';
+      final names = <String>{correctName};
+      for (final it in items) {
+        if (names.length >= 4) break;
+        final n = it['name'] ?? '';
+        if (n.isNotEmpty) names.add(n);
+      }
+      while (names.length < 4) {
+        names.add('---');
+      }
+      return names.toList()..shuffle();
+    });
   }
 
   @override

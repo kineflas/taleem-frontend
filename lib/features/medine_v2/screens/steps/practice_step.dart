@@ -246,12 +246,12 @@ class _ReorderExerciseState extends State<_ReorderExercise> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ..._placed.map((w) => _WordChip(
-                    word: w,
+                  ...List.generate(_placed.length, (pi) => _WordChip(
+                    word: _placed[pi],
                     onTap: () {
                       if (_isCorrect != null) return;
                       setState(() {
-                        _placed.remove(w);
+                        final w = _placed.removeAt(pi);
                         _shuffled.add(w);
                       });
                     },
@@ -274,17 +274,17 @@ class _ReorderExerciseState extends State<_ReorderExercise> {
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _shuffled.map((w) => _WordChip(
-                word: w,
+              children: List.generate(_shuffled.length, (si) => _WordChip(
+                word: _shuffled[si],
                 onTap: () {
                   if (_isCorrect != null) return;
                   setState(() {
-                    _shuffled.remove(w);
+                    final w = _shuffled.removeAt(si);
                     _placed.add(w);
                   });
                 },
                 isPlaced: false,
-              )).toList(),
+              )),
             ),
           ),
 

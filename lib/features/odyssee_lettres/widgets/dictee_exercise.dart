@@ -15,14 +15,20 @@ class DicteeExercise extends StatefulWidget {
 class _DicteeExerciseState extends State<DicteeExercise> {
   int _currentItem = 0;
   List<String> _selectedSyllabes = [];
+  /// Index-based tracking: which chip indices have been used
+  final Set<int> _usedChipIndices = {};
   bool _showFeedback = false;
   int _correctCount = 0;
 
-  List<String> _allChips(Map<String, dynamic> item) {
-    final correctes = List<String>.from(item['syllabes_correctes'] ?? []);
-    final distracteurs = List<String>.from(item['distracteurs'] ?? []);
-    final all = [...correctes, ...distracteurs]..shuffle();
-    return all;
+  /// Cached shuffled chips per item index (avoid reshuffle on rebuild)
+  final Map<int, List<String>> _cachedChips = {};
+
+  List<String> _getChips(int itemIndex, Map<String, dynamic> item) {
+    return _cachedChips.putIfAbsent(itemIndex, () {
+      final correctes = List<String>.from(item['syllabes_correctes'] ?? []);
+      final distracteurs = List<String>.from(item['distracteurs'] ?? []);
+      return [...correctes, ...distracteurs]..shuffle();
+    });
   }
 
   @override
@@ -36,7 +42,7 @@ class _DicteeExerciseState extends State<DicteeExercise> {
     final item = items[_currentItem];
     final mot = item['mot'] ?? '';
     final syllabesCorrectes = List<String>.from(item['syllabes_correctes'] ?? []);
-    final chips = _allChips(item);
+    final chips = _getChips(_currentItem, item);
     final isCorrectAnswer = _listEquals(_selectedSyllabes, syllabesCorrectes);
 
     return Padding(
@@ -115,7 +121,19 @@ class _DicteeExerciseState extends State<DicteeExercise> {
                         onTap: _showFeedback
                             ? null
                             : () {
-                                setState(() => _selectedSyllabes.removeAt(i));
+                                setState(() {
+                                  _selectedSyllabes.removeAt(i);
+                                  // Re-derive used indices from remaining selections
+                                  _usedChipIndices.clear();
+                                  for (final sel in _selectedSyllabes) {
+                                    for (int ci = 0; ci < chips.length; ci++) {
+                                      if (chips[ci] == sel && !_usedChipIndices.contains(ci)) {
+                                        _usedChipIndices.add(ci);
+                                        break;
+                                      }
+                                    }
+                                  }
+                                });
                               },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -167,13 +185,17 @@ class _DicteeExerciseState extends State<DicteeExercise> {
                 spacing: 10,
                 runSpacing: 10,
                 alignment: WrapAlignment.center,
-                children: chips.map((syl) {
-                  final alreadyUsed = _selectedSyllabes.contains(syl);
+                children: List.generate(chips.length, (chipIdx) {
+                  final syl = chips[chipIdx];
+                  final alreadyUsed = _usedChipIndices.contains(chipIdx);
                   return GestureDetector(
                     onTap: (_showFeedback || alreadyUsed)
                         ? null
                         : () {
-                            setState(() => _selectedSyllabes.add(syl));
+                            setState(() {
+                              _selectedSyllabes.add(syl);
+                              _usedChipIndices.add(chipIdx);
+                            });
                           },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
@@ -213,7 +235,10 @@ class _DicteeExerciseState extends State<DicteeExercise> {
                   child: Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: OutlinedButton(
-                      onPressed: () => setState(() => _selectedSyllabes.clear()),
+                      onPressed: () => setState(() {
+                        _selectedSyllabes.clear();
+                        _usedChipIndices.clear();
+                      }),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         side: const BorderSide(color: Color(0xFF999999)),
@@ -244,6 +269,7 @@ class _DicteeExerciseState extends State<DicteeExercise> {
                                 setState(() {
                                   _currentItem++;
                                   _selectedSyllabes = [];
+                                  _usedChipIndices.clear();
                                   _showFeedback = false;
                                 });
                               } else {
