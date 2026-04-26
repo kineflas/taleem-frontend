@@ -469,7 +469,7 @@ class _FillBlankExerciseState extends State<_FillBlankExercise> {
   int _score = 0;
   String? _selectedOption;
   bool? _isCorrect;          // null = not checked, true/false = feedback shown
-  late final List<String> _options;
+  late List<String> _options;
 
   @override
   void initState() {
